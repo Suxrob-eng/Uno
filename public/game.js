@@ -14,7 +14,8 @@ let state = {
   gameState: null,
   pendingCard: null,
   chatOpen: false,
-  unreadChat: 0
+  unreadChat: 0,
+  sortMethod: 'none'
 };
  
 let turnTimerInterval;
@@ -71,6 +72,8 @@ const els = {
   winMessage: document.getElementById('win-message'),
   playAgainBtn: document.getElementById('play-again-btn'),
   goLobbyBtn: document.getElementById('go-lobby-btn'),
+  sortColorBtn: document.getElementById('sort-color-btn'),
+  sortValueBtn: document.getElementById('sort-value-btn'),
 
   errorToast: document.getElementById('error-toast'),
   notifToast: document.getElementById('notif-toast')
@@ -251,16 +254,36 @@ function canPlayCard(card, topCard, currentColor, mustDraw, isCurrentPlayer = tr
 function renderMyHand(gs, isMyTurn) {
   if (!els.myHand) return;
   els.myHand.innerHTML = '';
-  const myHand = gs.players?.find(p => p.isMe)?.hand || [];
+  const myHandData = gs.players?.find(p => p.isMe)?.hand || [];
   
-  myHand.forEach((card, index) => {
+  let mappedHand = myHandData.map((card, idx) => ({ ...card, originalIndex: idx }));
+  
+  if (state.sortMethod === 'color') {
+    mappedHand.sort((a, b) => {
+      if (a.color === b.color) return (a.value || '').localeCompare(b.value || '');
+      return (a.color || 'z').localeCompare(b.color || 'z');
+    });
+  } else if (state.sortMethod === 'value') {
+    mappedHand.sort((a, b) => {
+      if (a.value === b.value) return (a.color || 'z').localeCompare(b.color || 'z');
+      return (a.value || '').localeCompare(b.value || '');
+    });
+  }
+
+  mappedHand.forEach((cardObj) => {
+    const card = cardObj;
+    const index = cardObj.originalIndex;
     const isJumpIn = (!isMyTurn && card.type !== 'wild' && card.type !== 'wild4' && card.color === gs.topCard?.color && card.value === gs.topCard?.value && !gs.mustDraw);
     const playable = (isMyTurn && gs.gameState === 'playing' && canPlayCard(card, gs.topCard, gs.currentColor, gs.mustDraw, isMyTurn)) || 
                      (gs.gameState === 'playing' && isJumpIn);
 
     const wrapper = document.createElement('div');
     wrapper.className = 'hand-card';
-    if (!playable) wrapper.classList.add('not-playable');
+    if (!playable) {
+      wrapper.classList.add('dimmed');
+    } else {
+      wrapper.classList.add('playable');
+    }
     if (isJumpIn) wrapper.classList.add('jump-in-glow');
     const cardEl = createCardElement(card, playable);
     wrapper.appendChild(cardEl);
@@ -344,6 +367,10 @@ function showWinModal(winner) {
   if (!els.winModal) return;
   const isWinner = winner?.id === state.myId;
   const winnerIsBot = winner?.id && winner.id.toString().startsWith('BOT_');
+
+  if (typeof confetti === 'function') {
+    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+  }
 
   if (isWinner) {
     if (els.winTitle) els.winTitle.textContent = '🎉 Siz g\'oldingiz!';
@@ -454,6 +481,9 @@ function addChatMessage(data) {
   if (data.type === 'system') {
     div.className = 'chat-msg system';
     div.textContent = data.message;
+    if (state.screen !== 'game') {
+      showNotif(data.message);
+    }
   } else if (data.type === 'uno') {
     div.className = 'chat-msg uno-msg';
     div.textContent = data.message;
@@ -793,6 +823,34 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'u' || e.key === 'U') && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
     socket.emit('sayUno');
   }
+  if (e.code === 'Space' && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
+    e.preventDefault();
+    if (els.drawBtn && !els.drawBtn.classList.contains('disabled')) {
+      els.drawBtn.click();
+    }
+  }
+  if (e.key === 'Enter' && state.screen === 'game') {
+    if (document.activeElement !== els.chatInput) {
+      e.preventDefault();
+      if (els.chatPanel && !els.chatPanel.classList.contains('open')) {
+        els.chatToggleBtn?.click();
+      }
+      setTimeout(() => els.chatInput?.focus(), 100);
+    }
+  }
 });
+
+if (els.sortColorBtn) {
+  els.sortColorBtn.addEventListener('click', () => {
+    state.sortMethod = state.sortMethod === 'color' ? 'none' : 'color';
+    updateGameUI(state.gameState);
+  });
+}
+if (els.sortValueBtn) {
+  els.sortValueBtn.addEventListener('click', () => {
+    state.sortMethod = state.sortMethod === 'value' ? 'none' : 'value';
+    updateGameUI(state.gameState);
+  });
+}
 
 console.log('🎮 UNO Online (Bot Support) yuklandi!');

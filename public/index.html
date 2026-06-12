@@ -247,8 +247,14 @@
   
   <div class="player-area">
     <div class="player-info-bar">
-      <span id="my-name-display" class="my-name">Sen</span>
-      <span id="my-card-count" class="card-count-badge">0</span>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span id="my-name-display" class="my-name">Sen</span>
+        <span id="my-card-count" class="card-count-badge">0</span>
+      </div>
+      <div class="sort-actions" style="display:flex; gap:8px;">
+        <button id="sort-color-btn" class="btn-sort" title="Rang bo'yicha saralash">🎨</button>
+        <button id="sort-value-btn" class="btn-sort" title="Raqam/Tur bo'yicha saralash">🔢</button>
+      </div>
     </div>
     <div id="my-hand" class="my-hand"></div>
   </div>
@@ -286,6 +292,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

@@ -1327,3 +1327,132 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-glow); }
+
+/* ==============================
+   UX / CONVENIENCES
+   ============================== */
+
+/* Sort buttons */
+.btn-sort {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: var(--transition);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-sort:hover {
+  background: rgba(255,255,255,0.15);
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.btn-sort:active {
+  transform: translateY(0);
+}
+
+/* Playable card highlighting */
+.card.dimmed {
+  opacity: 0.6;
+  filter: grayscale(30%);
+}
+
+.card.playable {
+  animation: playable-glow 2s infinite alternate;
+  cursor: pointer;
+}
+
+.card.playable:hover {
+  transform: translateY(-15px) scale(1.05) !important;
+}
+
+@keyframes playable-glow {
+  0% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.2); border-color: rgba(255,255,255,0.4); }
+  100% { box-shadow: 0 0 25px rgba(255, 255, 255, 0.8); border-color: rgba(255,255,255,0.9); }
+}
+
+/* ==============================
+   ROOM PRIVACY / LOBBY STYLES
+   ============================== */
+
+.room-type-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 15px 0;
+}
+.room-type-btn {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #fff;
+}
+.room-type-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+.room-type-btn.active {
+  background: rgba(46, 204, 113, 0.15);
+  border-color: #2ecc71;
+  box-shadow: 0 4px 15px rgba(46, 204, 113, 0.2);
+}
+.room-type-btn#type-private.active {
+  background: rgba(231, 76, 60, 0.15);
+  border-color: #e74c3c;
+  box-shadow: 0 4px 15px rgba(231, 76, 60, 0.2);
+}
+.room-type-icon {
+  font-size: 24px;
+  margin-right: 16px;
+}
+.room-type-info {
+  flex: 1;
+}
+.room-type-title {
+  font-weight: bold;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.room-type-desc {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+}
+.room-type-check {
+  font-weight: bold;
+  color: #2ecc71;
+  font-size: 18px;
+}
+#type-private .room-type-check {
+  color: #e74c3c;
+}
+.privacy-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.privacy-badge.open {
+  background: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+  border: 1px solid #2ecc71;
+}
+.privacy-badge.private {
+  background: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+  border: 1px solid #e74c3c;
+}
