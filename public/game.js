@@ -315,17 +315,40 @@ function renderMyHand(gs, isMyTurn) {
   els.myHand.innerHTML = '';
   const myHandData = gs.players?.find(p => p.isMe)?.hand || [];
   
+  if (!myHandData || myHandData.length === 0) {
+    els.myHand.innerHTML = '<div class="empty-hand">Kartalar yo\'q!</div>';
+    return;
+  }
+  
   let mappedHand = myHandData.map((card, idx) => ({ ...card, originalIndex: idx }));
   
   if (state.sortMethod === 'color') {
     mappedHand.sort((a, b) => {
       if (a.color === b.color) return (a.value || '').localeCompare(b.value || '');
-      return (a.color || 'z').localeCompare(b.color || 'z');
+      const colorOrder = { red: 0, green: 1, blue: 2, yellow: 3, wild: 4 };
+      return (colorOrder[a.color] || 5) - (colorOrder[b.color] || 5);
     });
   } else if (state.sortMethod === 'value') {
     mappedHand.sort((a, b) => {
-      if (a.value === b.value) return (a.color || 'z').localeCompare(b.color || 'z');
-      return (a.value || '').localeCompare(b.value || '');
+      const valOrder = (val) => {
+        if (val === '0') return 0;
+        if (val === '1') return 1;
+        if (val === '2') return 2;
+        if (val === '3') return 3;
+        if (val === '4') return 4;
+        if (val === '5') return 5;
+        if (val === '6') return 6;
+        if (val === '7') return 7;
+        if (val === '8') return 8;
+        if (val === '9') return 9;
+        if (val === 'skip') return 10;
+        if (val === 'reverse') return 11;
+        if (val === 'draw2') return 12;
+        if (val === 'wild') return 13;
+        if (val === 'wild4') return 14;
+        return 99;
+      };
+      return valOrder(a.value) - valOrder(b.value);
     });
   }
 
@@ -345,11 +368,24 @@ function renderMyHand(gs, isMyTurn) {
       wrapper.classList.add('playable');
     }
     if (isJumpIn) wrapper.classList.add('jump-in-glow');
+    
     const cardEl = createCardElement(card, playable);
     wrapper.appendChild(cardEl);
-    if (playable) wrapper.addEventListener('click', () => onPlayCard(card, index));
+    
+    if (playable) {
+      wrapper.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onPlayCard(card, index);
+      });
+    }
+    
     els.myHand.appendChild(wrapper);
   });
+  
+  // Scrollni eng oxirgi kartaga olib borish (ixtiyoriy)
+  if (els.myHand.scrollWidth > els.myHand.clientWidth) {
+    els.myHand.scrollLeft = els.myHand.scrollWidth;
+  }
 }
 
 function renderOtherPlayers(gs) {

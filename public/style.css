@@ -828,45 +828,151 @@ html, body {
   to { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
-/* Hand cards */
+/* ==============================
+   HAND CARDS - YAXSHILANGAN
+   ============================== */
 .my-hand {
   display: flex;
-  align-items: flex-end;
-  gap: 0;
-  padding: 0 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 20px;
   overflow-x: auto;
   overflow-y: visible;
   scrollbar-width: thin;
-  min-height: 150px;
-  padding-bottom: 8px;
+  min-height: 180px;
+  flex-wrap: nowrap;
+  background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 100%);
+  border-radius: 20px;
+  margin: 0 10px;
 }
 
 .hand-card {
-  margin-right: -25px;
-  transition: transform 0.2s ease, z-index 0s, margin 0.2s;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, filter 0.2s ease;
   position: relative;
-}
-
-.hand-card:last-child { margin-right: 0; }
-
-.hand-card:hover {
-  transform: translateY(-25px) scale(1.08);
-  z-index: 10;
-  margin-right: 0;
-}
-
-.hand-card.playable:hover {
   cursor: pointer;
 }
 
-.hand-card.not-playable {
-  filter: brightness(0.5) saturate(0.5);
+/* Har bir karta orasida bo'shliq - yopishib qolmasligi uchun */
+.hand-card:not(:last-child) {
+  margin-right: 8px;
 }
 
-.hand-card.not-playable:hover {
-  transform: translateY(-8px);
+/* Karta hover effekti */
+.hand-card:hover {
+  transform: translateY(-25px) scale(1.08);
+  z-index: 100;
+}
+
+/* O'ynab bo'ladigan kartalar */
+.hand-card.playable:hover {
+  transform: translateY(-28px) scale(1.1);
+  filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4));
+}
+
+/* O'ynab bo'lmaydigan kartalar */
+.hand-card.dimmed {
+  opacity: 0.6;
+  filter: grayscale(30%);
   cursor: not-allowed;
 }
+
+.hand-card.dimmed:hover {
+  transform: translateY(-8px);
+  opacity: 0.7;
+}
+
+/* JUMP-IN effekti */
+.hand-card.jump-in-glow {
+  animation: jumpInPulse 0.8s infinite alternate;
+}
+
+/* Kartalarning o'lchamlari - kattaroq va aniq */
+.card {
+  width: 100px;
+  height: 140px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  user-select: none;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+
+/* Top card - biroz kattaroq */
+.top-card {
+  width: 110px;
+  height: 154px;
+  cursor: default;
+  animation: cardSlide 0.3s ease;
+}
+
+/* Deck card */
+.deck-card {
+  width: 100px;
+  height: 140px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+
+/* Responsive - kichik ekranlar uchun */
+@media (max-width: 700px) {
+  .card {
+    width: 75px;
+    height: 105px;
+  }
+  .top-card {
+    width: 85px;
+    height: 119px;
+  }
+  .deck-card {
+    width: 75px;
+    height: 105px;
+  }
+  .hand-card:not(:last-child) {
+    margin-right: 4px;
+  }
+  .my-hand {
+    gap: 4px;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 500px) {
+  .card {
+    width: 60px;
+    height: 84px;
+  }
+  .top-card {
+    width: 68px;
+    height: 95px;
+  }
+  .deck-card {
+    width: 60px;
+    height: 84px;
+  }
+  .card-value-center {
+    font-size: 22px;
+  }
+  .hand-card:not(:last-child) {
+    margin-right: 2px;
+  }
+  .my-hand {
+    gap: 2px;
+    padding: 8px;
+  }
+  .hand-card:hover {
+    transform: translateY(-15px) scale(1.05);
+  }
+}
+
 
 /* Player area */
 .player-area {
@@ -1977,6 +2083,14 @@ html, body {
     width: 250px;
     display: block;
     margin: 20px auto;
+}
+
+.empty-hand {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 16px;
+  padding: 20px;
+  width: 100%;
 }
 
 @keyframes floatUp {
