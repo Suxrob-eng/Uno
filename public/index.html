@@ -18,7 +18,7 @@
 <!-- ========== LOADING OVERLAY ========== -->
 <div id="loading-overlay" class="loading-overlay hidden">
   <div class="loading-spinner"></div>
-  <div class="loading-text" id="loading-text">Siz Oyindasiz...</div>
+  <div class="loading-text" id="loading-text">Yuklanmoqda...</div>
 </div>
 
 <!-- ========== AUTH SCREEN ========== -->
@@ -290,7 +290,7 @@
       <div class="turn-indicator">
         <div id="current-turn-name" class="turn-name">—</div>
         <div class="turn-label">navbatda</div>
-        <div id="turn-timer-container" style="width:100%; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; margin-top:8px; overflow:hidden; display:none;">
+        <div id="turn-timer-container" style="width:100%; height:6px; background:rgba(255,255,255,0.2); border-radius:3px; margin-top:10px; overflow:hidden; display:none;">
           <div id="turn-timer-bar" style="width:100%; height:100%; background:#2ecc71; transition:width 0.1s linear;"></div>
         </div>
       </div>
@@ -340,16 +340,17 @@
     <button class="btn-reaction" data-emoji="👎">👎</button>
   </div>
   
+  <!-- PLAYER AREA - KENGAYTIRILGAN -->
   <div class="player-area">
     <div class="player-info-bar">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <img id="my-avatar" class="my-avatar" src="/avatars/default1.svg" width="32" height="32" style="border-radius:50%">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <img id="my-avatar" class="my-avatar" src="/avatars/default1.svg" alt="Avatar">
         <span id="my-name-display" class="my-name">Sen</span>
-        <span id="my-card-count" class="card-count-badge">0</span>
+        <span id="my-card-count" class="card-count-badge">0 karta</span>
       </div>
       <div class="sort-actions">
-        <button id="sort-color-btn" class="btn-sort" title="Rang bo'yicha saralash">🎨</button>
-        <button id="sort-value-btn" class="btn-sort" title="Raqam bo'yicha saralash">🔢</button>
+        <button id="sort-color-btn" class="btn-sort" title="Rang bo'yicha saralash">🎨 Rang</button>
+        <button id="sort-value-btn" class="btn-sort" title="Qiymat bo'yicha saralash">🔢 Qiymat</button>
       </div>
     </div>
     <div id="my-hand" class="my-hand"></div>

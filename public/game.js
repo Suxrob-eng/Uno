@@ -1,5 +1,5 @@
 // ==========================================
-//   UNO ONLINE - CLIENT GAME LOGIC (FULL VERSION)
+//   UNO ONLINE - CLIENT GAME LOGIC
 // ==========================================
 
 let socket = null;
@@ -210,96 +210,6 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function updateGameUI(gs) {
-  if (!gs) return;
-  state.gameState = gs;
-
-  const me = gs.players?.find(p => p.isMe);
-  const isMyTurn = gs.currentPlayerId === state.myId;
-
-  if (gs.topCard) renderTopCard(gs.topCard);
-
-  if (els.currentColorBadge && gs.currentColor) {
-    els.currentColorBadge.className = `color-badge ${gs.currentColor}`;
-    els.currentColorBadge.textContent = getColorName(gs.currentColor);
-  }
-  if (els.deckCount) els.deckCount.textContent = gs.deckCount || 0;
-
-  const currentPlayer = gs.players?.find(p => p.isCurrentPlayer);
-  if (els.currentTurnName) {
-    els.currentTurnName.textContent = currentPlayer
-      ? (currentPlayer.isMe ? 'Siz' : (currentPlayer.displayName || currentPlayer.name))
-      : '—';
-  }
-  if (els.directionIndicator) {
-    els.directionIndicator.textContent = gs.direction === 1 ? '→' : '←';
-  }
-  
-  if (gs.gameState === 'playing' && gs.turnStartTime && gs.turnDuration) {
-    const container = document.getElementById('turn-timer-container');
-    const bar = document.getElementById('turn-timer-bar');
-    if (container && bar) {
-      container.style.display = 'block';
-      if (turnTimerInterval) clearInterval(turnTimerInterval);
-      
-      const updateTimer = () => {
-        const elapsed = Date.now() - gs.turnStartTime;
-        let remaining = gs.turnDuration - elapsed;
-        if (remaining < 0) remaining = 0;
-        
-        let percent = (remaining / gs.turnDuration) * 100;
-        bar.style.width = percent + '%';
-        
-        if (percent > 50) {
-          bar.style.background = '#2ecc71';
-        } else if (percent > 20) {
-          bar.style.background = '#f1c40f';
-        } else {
-          bar.style.background = '#e74c3c';
-        }
-      };
-      
-      updateTimer();
-      turnTimerInterval = setInterval(updateTimer, 100);
-    }
-  } else {
-    const container = document.getElementById('turn-timer-container');
-    if (container) container.style.display = 'none';
-    if (turnTimerInterval) clearInterval(turnTimerInterval);
-  }
-
-  if (me) {
-    if (els.myCardCount) els.myCardCount.textContent = `${me.cardCount} karta`;
-  }
-
-  renderMyHand(gs, isMyTurn);
-  renderOtherPlayers(gs);
-
-  if (els.drawBtn) {
-    if (isMyTurn && gs.gameState === 'playing') {
-      els.drawBtn.classList.remove('disabled');
-    } else {
-      els.drawBtn.classList.add('disabled');
-    }
-  }
-
-  if (els.unoBtn) {
-    els.unoBtn.style.display = (me && me.cardCount === 1 && gs.gameState === 'playing') ? 'block' : 'none';
-  }
-
-  const catchTarget = gs.players?.find(p => !p.isMe && p.cardCount === 1 && !p.saidUno);
-  if (els.catchUnoBtn) {
-    if (catchTarget && gs.gameState === 'playing') {
-      els.catchUnoBtn.style.display = 'block';
-      els.catchUnoBtn.dataset.targetId = catchTarget.id;
-    } else {
-      els.catchUnoBtn.style.display = 'none';
-    }
-  }
-
-  if (gs.gameState === 'finished' && gs.winner) showWinModal(gs.winner);
-}
-
 function canPlayCard(card, topCard, currentColor, mustDraw, isCurrentPlayer = true) {
   if (!card || !topCard) return false;
   if (!isCurrentPlayer) return false;
@@ -382,7 +292,6 @@ function renderMyHand(gs, isMyTurn) {
     els.myHand.appendChild(wrapper);
   });
   
-  // Scrollni eng oxirgi kartaga olib borish (ixtiyoriy)
   if (els.myHand.scrollWidth > els.myHand.clientWidth) {
     els.myHand.scrollLeft = els.myHand.scrollWidth;
   }
@@ -405,7 +314,7 @@ function renderOtherPlayers(gs) {
 
     area.innerHTML = `
       <div class="opponent-info">
-        <div class="opponent-avatar"><img src="${player.avatar || '/avatars/default1.svg'}" width="32" height="32" style="border-radius:50%"></div>
+        <div class="opponent-avatar"><img src="${player.avatar || '/avatars/default1.svg'}" width="36" height="36" style="border-radius:50%"></div>
         <div class="opponent-name ${player.isCurrentPlayer ? 'active' : ''}">
           ${escapeHtml(player.displayName || player.name)} ${player.isCurrentPlayer ? '▼' : ''}
         </div>
@@ -418,6 +327,103 @@ function renderOtherPlayers(gs) {
 
     els.otherPlayers.appendChild(area);
   });
+}
+
+function updateGameUI(gs) {
+  if (!gs) return;
+  state.gameState = gs;
+
+  const me = gs.players?.find(p => p.isMe);
+  const isMyTurn = gs.currentPlayerId === state.myId;
+
+  if (gs.topCard) renderTopCard(gs.topCard);
+
+  if (els.currentColorBadge && gs.currentColor) {
+    els.currentColorBadge.className = `color-badge ${gs.currentColor}`;
+    els.currentColorBadge.textContent = getColorName(gs.currentColor);
+  }
+  if (els.deckCount) els.deckCount.textContent = gs.deckCount || 0;
+
+  const currentPlayer = gs.players?.find(p => p.isCurrentPlayer);
+  if (els.currentTurnName) {
+    els.currentTurnName.textContent = currentPlayer
+      ? (currentPlayer.isMe ? 'Siz' : (currentPlayer.displayName || currentPlayer.name))
+      : '—';
+  }
+  if (els.directionIndicator) {
+    els.directionIndicator.textContent = gs.direction === 1 ? '→' : '←';
+  }
+  
+  if (gs.gameState === 'playing' && gs.turnStartTime && gs.turnDuration) {
+    const container = document.getElementById('turn-timer-container');
+    const bar = document.getElementById('turn-timer-bar');
+    if (container && bar) {
+      container.style.display = 'block';
+      if (turnTimerInterval) clearInterval(turnTimerInterval);
+      
+      const updateTimer = () => {
+        const elapsed = Date.now() - gs.turnStartTime;
+        let remaining = gs.turnDuration - elapsed;
+        if (remaining < 0) remaining = 0;
+        
+        let percent = (remaining / gs.turnDuration) * 100;
+        bar.style.width = percent + '%';
+        
+        if (percent > 50) {
+          bar.style.background = '#2ecc71';
+        } else if (percent > 20) {
+          bar.style.background = '#f1c40f';
+        } else {
+          bar.style.background = '#e74c3c';
+        }
+      };
+      
+      updateTimer();
+      turnTimerInterval = setInterval(updateTimer, 100);
+    }
+  } else {
+    const container = document.getElementById('turn-timer-container');
+    if (container) container.style.display = 'none';
+    if (turnTimerInterval) clearInterval(turnTimerInterval);
+  }
+
+  if (me) {
+    if (els.myCardCount) els.myCardCount.textContent = `${me.cardCount} karta`;
+    if (me.cardCount === 1) {
+      if (els.myCardCount) els.myCardCount.style.background = "#ffd32a";
+      if (els.myCardCount) els.myCardCount.style.color = "#000";
+    } else {
+      if (els.myCardCount) els.myCardCount.style.background = "";
+      if (els.myCardCount) els.myCardCount.style.color = "";
+    }
+  }
+
+  renderMyHand(gs, isMyTurn);
+  renderOtherPlayers(gs);
+
+  if (els.drawBtn) {
+    if (isMyTurn && gs.gameState === 'playing') {
+      els.drawBtn.classList.remove('disabled');
+    } else {
+      els.drawBtn.classList.add('disabled');
+    }
+  }
+
+  if (els.unoBtn) {
+    els.unoBtn.style.display = (me && me.cardCount === 1 && gs.gameState === 'playing') ? 'block' : 'none';
+  }
+
+  const catchTarget = gs.players?.find(p => !p.isMe && p.cardCount === 1 && !p.saidUno);
+  if (els.catchUnoBtn) {
+    if (catchTarget && gs.gameState === 'playing') {
+      els.catchUnoBtn.style.display = 'block';
+      els.catchUnoBtn.dataset.targetId = catchTarget.id;
+    } else {
+      els.catchUnoBtn.style.display = 'none';
+    }
+  }
+
+  if (gs.gameState === 'finished' && gs.winner) showWinModal(gs.winner);
 }
 
 function onPlayCard(card, index) {
@@ -1308,8 +1314,8 @@ async function loadLeaderboard() {
         div.className = 'leaderboard-item';
         div.innerHTML = `
           <span class="rank">${idx + 1}</span>
-          <img src="${user.avatar}" width="30" height="30" style="border-radius:50%">
-          <span class="name">${escapeHtml(user.displayName)}</span>
+          <img src="${user.avatar_url}" width="30" height="30" style="border-radius:50%">
+          <span class="name">${escapeHtml(user.display_name)}</span>
           <span class="wins">🏆 ${user.wins}</span>
         `;
         container.appendChild(div);
