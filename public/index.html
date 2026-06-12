@@ -16,11 +16,11 @@
 <!-- ========== LOADING OVERLAY ========== -->
 <div id="loading-overlay" class="loading-overlay hidden">
   <div class="loading-spinner"></div>
-  <div class="loading-text" id="loading-text">Yuklanmoqda...</div>
+  <div class="loading-text" id="loading-text">Siz Oyindasiz...</div>
 </div>
 
 <!-- ========== AUTH SCREEN ========== -->
-<div id="auth-screen" class="screen">
+<div id="auth-screen" class="screen active">
   <div class="lobby-bg">
     <div class="orb orb1"></div>
     <div class="orb orb2"></div>
@@ -83,7 +83,7 @@
 <!-- ========== PROFILE SIDEBAR ========== -->
 <div id="profile-sidebar" class="profile-sidebar">
   <div class="profile-header">
-    <h3>Profil</h3>
+    <h3>👤 Profil</h3>
     <button id="close-profile-btn" class="btn-icon-only">✕</button>
   </div>
   <div class="profile-avatar-container">
@@ -99,9 +99,11 @@
       <span id="profile-displayname">-</span>
     </div>
     <div class="profile-field">
-      <label>Statistika</label>
-      <span>🏆 Yutuqlar: <span id="profile-wins">0</span></span>
-      <span>🎮 O'yinlar: <span id="profile-games">0</span></span>
+      <label>📊 Statistika</label>
+      <div class="stats-row">
+        <span>🏆 Yutuqlar: <strong id="profile-wins">0</strong></span>
+        <span>🎮 O'yinlar: <strong id="profile-games">0</strong></span>
+      </div>
     </div>
   </div>
   <div id="profile-edit-section" class="profile-edit-section" style="display:none">
@@ -116,8 +118,8 @@
     <button id="save-profile-btn" class="btn btn-primary">Saqlash</button>
   </div>
   <div class="profile-actions">
-    <button id="edit-profile-btn" class="btn btn-secondary">Tahrirlash</button>
-    <button id="logout-btn" class="btn btn-ghost">Chiqish</button>
+    <button id="edit-profile-btn" class="btn btn-secondary">✏️ Tahrirlash</button>
+    <button id="logout-btn" class="btn btn-ghost">🚪 Chiqish</button>
   </div>
 </div>
 
@@ -148,24 +150,19 @@
     </div>
     
     <div class="lobby-card">
-      <div class="lobby-actions">
-        <button id="create-room-btn" class="btn btn-primary">
-          <span class="btn-icon">🏠</span>
-          Xona Yaratish
-        </button>
-      </div>
+      <button id="create-room-btn" class="btn btn-primary">
+        🏠 Xona Yaratish
+      </button>
       
       <div class="divider"><span>yoki</span></div>
       
       <div class="join-section">
-        <h3>Xonaga Qo'shilish (Kod bilan)</h3>
+        <h3>🔑 Xonaga Qo'shilish (Kod bilan)</h3>
         <div class="input-group">
-          <label for="room-code">Xona Kodi</label>
           <input type="text" id="room-code" placeholder="Masalan: ABC123" maxlength="8" style="text-transform:uppercase" />
         </div>
         <button id="join-room-btn" class="btn btn-secondary">
-          <span class="btn-icon">🚪</span>
-          Qo'shilish
+          🚪 Qo'shilish
         </button>
       </div>
 
@@ -173,7 +170,7 @@
 
       <div class="public-rooms-section">
         <div class="public-rooms-header">
-          <h3>Ochiq Xonalar</h3>
+          <h3>🌐 Ochiq Xonalar</h3>
           <button id="refresh-rooms-btn" class="btn-icon-only" title="Yangilash">🔄</button>
         </div>
         <div id="rooms-list" class="rooms-list">
@@ -186,7 +183,7 @@
 
 <!-- ========== CREATE ROOM MODAL ========== -->
 <div id="create-room-modal" class="modal hidden">
-  <div class="modal-backdrop" id="create-modal-backdrop"></div>
+  <div class="modal-backdrop"></div>
   <div class="modal-content create-room-content">
     <h3>🏠 Yangi Xona Yaratish</h3>
     <p class="modal-subtitle">Xona turini tanlang</p>
@@ -223,7 +220,7 @@
 
     <div class="create-modal-actions">
       <button id="confirm-create-btn" class="btn btn-primary">✅ Xona Ochish</button>
-      <button id="cancel-create-btn" class="btn btn-ghost">Bekor</button>
+      <button id="cancel-create-btn" class="btn btn-ghost">Bekor qilish</button>
     </div>
   </div>
 </div>
@@ -239,7 +236,7 @@
   <div class="waiting-container">
     <div class="waiting-card">
       <div class="waiting-header-row">
-        <h2>Xona</h2>
+        <h2>🎮 Xona</h2>
         <div id="room-privacy-badge" class="privacy-badge open">🌐 Ochiq</div>
       </div>
       <div class="room-code-display">
@@ -250,7 +247,7 @@
       
       <div class="waiting-capacity">
         <span id="waiting-capacity-text">0/8 o'yinchi</span>
-        <div id="waiting-capacity-bar" class="capacity-bar">
+        <div class="capacity-bar">
           <div id="capacity-fill" class="capacity-fill" style="width:0%"></div>
         </div>
       </div>
@@ -291,12 +288,12 @@
       <div class="turn-indicator">
         <div id="current-turn-name" class="turn-name">—</div>
         <div class="turn-label">navbatda</div>
-        <div id="turn-timer-container" style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; margin-top: 5px; overflow: hidden; display: none;">
-          <div id="turn-timer-bar" style="width: 100%; height: 100%; background: #2ecc71; transition: width 0.1s linear;"></div>
+        <div id="turn-timer-container" style="width:100%; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; margin-top:8px; overflow:hidden; display:none;">
+          <div id="turn-timer-bar" style="width:100%; height:100%; background:#2ecc71; transition:width 0.1s linear;"></div>
         </div>
       </div>
       <div class="direction-indicator" id="direction-indicator">→</div>
-      <div class="deck-area" id="deck-area">
+      <div class="deck-area">
         <div class="deck-card" id="draw-btn">
           <div class="deck-back">
             <span class="deck-count" id="deck-count">108</span>
@@ -312,6 +309,7 @@
     </div>
   </div>
   
+  <!-- Chat panel -->
   <div class="chat-panel" id="chat-panel">
     <div class="chat-header">
       <span>💬 Chat</span>
@@ -336,6 +334,8 @@
     <button class="btn-reaction" data-emoji="😡">😡</button>
     <button class="btn-reaction" data-emoji="🎉">🎉</button>
     <button class="btn-reaction" data-emoji="😭">😭</button>
+    <button class="btn-reaction" data-emoji="👍">👍</button>
+    <button class="btn-reaction" data-emoji="👎">👎</button>
   </div>
   
   <div class="player-area">
@@ -345,14 +345,15 @@
         <span id="my-name-display" class="my-name">Sen</span>
         <span id="my-card-count" class="card-count-badge">0</span>
       </div>
-      <div class="sort-actions" style="display:flex; gap:8px;">
+      <div class="sort-actions">
         <button id="sort-color-btn" class="btn-sort" title="Rang bo'yicha saralash">🎨</button>
-        <button id="sort-value-btn" class="btn-sort" title="Raqam/Tur bo'yicha saralash">🔢</button>
+        <button id="sort-value-btn" class="btn-sort" title="Raqam bo'yicha saralash">🔢</button>
       </div>
     </div>
     <div id="my-hand" class="my-hand"></div>
   </div>
   
+  <!-- Color picker modal -->
   <div id="color-picker" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content color-picker-content">
@@ -366,6 +367,7 @@
     </div>
   </div>
   
+  <!-- Win modal -->
   <div id="win-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content win-content">
@@ -379,6 +381,7 @@
     </div>
   </div>
   
+  <!-- Toasts -->
   <div id="error-toast" class="toast hidden"></div>
   <div id="notif-toast" class="toast notif hidden"></div>
 </div>
