@@ -2,27 +2,40 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
- 
+const crypto = require('crypto');
+
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
- 
+const io = new Server(server, { 
+  cors: { origin: '*' },
+  transports: ['websocket', 'polling']
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
- 
+app.use(express.json());
+
+// ==================== USER DATABASE ====================
+const users = new Map(); // username -> user data
+const sessions = new Map(); // sessionToken -> username
+
+// Default avatars
+const DEFAULT_AVATARS = [
+  '/avatars/default1.svg', '/avatars/default2.svg', 
+  '/avatars/default3.svg', '/avatars/default4.svg'
+];
+
 // ==================== UNO GAME LOGIC ====================
- 
 const COLORS = ['red', 'green', 'blue', 'yellow'];
 const SPECIAL_CARDS = ['skip', 'reverse', 'draw2'];
- 
 const BOT_NAMES = ['🤖 Zamin', '🦾 Robotcha', '👾 Kibor', '🧠 AIBot'];
 const BOT_COMMENTS = {
-  play:    ['Zo\'r karta!', 'Ha-ha!', 'Mana bu!', 'Oldinga!', 'Hmmm...'],
-  draw:    ['Karta olaman...', 'Menga yaxshisi yo\'q...', 'Olaman!'],
-  uno:     ['UNO!!!', 'Yaqinlashyapman!', 'UNO, do\'stlar!'],
-  win:     ['G\'oldim! 🏆', 'Men eng yaxshiman!', 'Haha, yutdim!'],
-  taunt:   ['Kuchsizlar!', 'Menga to\'siq bo\'lolmaysiz!', 'Keyingi navbat meniki!']
+  play: ['Zo\'r karta!', 'Ha-ha!', 'Mana bu!', 'Oldinga!', 'Hmmm...'],
+  draw: ['Karta olaman...', 'Menga yaxshisi yo\'q...', 'Olaman!'],
+  uno: ['UNO!!!', 'Yaqinlashyapman!', 'UNO, do\'stlar!'],
+  win: ['G\'oldim! 🏆', 'Men eng yaxshiman!', 'Haha, yutdim!'],
+  taunt: ['Kuchsizlar!', 'Menga to\'siq bo\'lolmaysiz!', 'Keyingi navbat meniki!']
 };
- 
+
 function createDeck() {
   const deck = [];
   COLORS.forEach(color => {
@@ -42,7 +55,7 @@ function createDeck() {
   }
   return deck;
 }
- 
+
 function shuffleDeck(deck) {
   const arr = [...deck];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -51,7 +64,7 @@ function shuffleDeck(deck) {
   }
   return arr;
 }
- 
+
 function canPlay(card, topCard, currentColor, mustDraw) {
   if (mustDraw) return card.value === 'draw2' || card.value === 'wild4';
   if (card.type === 'wild' || card.type === 'wild4') return true;
@@ -59,13 +72,12 @@ function canPlay(card, topCard, currentColor, mustDraw) {
   if (card.value === topCard.value) return true;
   return false;
 }
- 
+
 // ==================== ROOM MANAGEMENT ====================
- 
 const rooms = {};
- 
+
 function getRoom(roomId) { return rooms[roomId]; }
- 
+
 function getRoomList() {
   return Object.values(rooms)
     .filter(r => r.gameState === 'waiting' && r.privacy === 'open' && r.players.length < r.maxPlayers)
@@ -76,7 +88,7 @@ function getRoomList() {
       host: r.players.find(p => p.id === r.host)?.name || 'Unknown'
     }));
 }
- 
+
 function drawCards(room, count) {
   const drawn = [];
   for (let i = 0; i < count; i++) {
@@ -89,13 +101,13 @@ function drawCards(room, count) {
   }
   return drawn;
 }
- 
+
 function nextPlayer(room) {
   const count = room.players.length;
   room.currentPlayerIndex = ((room.currentPlayerIndex + room.direction) % count + count) % count;
   startTurnTimer(room);
 }
- 
+
 function startTurnTimer(room) {
   if (room.gameState !== 'playing') return;
   if (room.turnTimer) clearTimeout(room.turnTimer);
@@ -114,12 +126,11 @@ function startTurnTimer(room) {
     }
   }, room.turnDuration);
 }
- 
+
 function getTopCard(room) {
   return room.discardPile[room.discardPile.length - 1];
 }
- 
-// TUZATILGAN: buildGameState to'liq mos keladigan formatda
+
 function buildGameState(room, playerId) {
   const player = room.players.find(p => p.id === playerId);
   if (!player) return null;
@@ -144,6 +155,8 @@ function buildGameState(room, playerId) {
     players: room.players.map((p, i) => ({
       id: p.id,
       name: p.name,
+      displayName: p.displayName || p.name,
+      avatar: p.avatar || '/avatars/default1.svg',
       cardCount: p.hand.length,
       hand: p.id === playerId ? p.hand : [],
       isBot: p.isBot || false,
@@ -153,37 +166,36 @@ function buildGameState(room, playerId) {
     }))
   };
 }
- 
+
 function broadcastState(room) {
   room.players.filter(p => !p.isBot).forEach(p => {
     const s = io.sockets.sockets.get(p.id);
     if (s) s.emit('gameUpdate', buildGameState(room, p.id));
   });
 }
- 
+
 // ==================== PLAY CARD ====================
- 
 function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
   const player = room.players[playerIndex];
   const card = player.hand[cardIndex];
- 
+
   player.hand.splice(cardIndex, 1);
   player.saidUno = false;
   room.discardPile.push(card);
- 
+
   if (card.type === 'wild' || card.type === 'wild4') {
     room.currentColor = chosenColor || 'red';
   } else {
     room.currentColor = card.color;
   }
- 
+
   if (player.hand.length === 0) {
     room.gameState = 'finished';
     room.winner = player.id;
     if (room.turnTimer) clearTimeout(room.turnTimer);
     return { won: true };
   }
- 
+
   if (card.value === 'skip') {
     nextPlayer(room);
     nextPlayer(room);
@@ -203,14 +215,14 @@ function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
   } else {
     nextPlayer(room);
   }
- 
+
   return null;
 }
- 
+
 function applyDrawCard(room, playerIndex) {
   const player = room.players[playerIndex];
   let drawCount = 1;
- 
+
   if (room.pendingDraw > 0) {
     drawCount = room.pendingDraw;
     room.pendingDraw = 0;
@@ -219,19 +231,18 @@ function applyDrawCard(room, playerIndex) {
   const drawn = drawCards(room, drawCount);
   player.hand.push(...drawn);
   player.saidUno = false;
- 
+
   io.to(room.id).emit('chatMessage', { type: 'system', message: `🃏 ${player.name} ${drawCount} ta karta oldi.` });
- 
+
   nextPlayer(room);
 }
- 
+
 // ==================== BOT AI ====================
- 
 function getBotRandomComment(type) {
   const arr = BOT_COMMENTS[type];
   return arr[Math.floor(Math.random() * arr.length)];
 }
- 
+
 function chooseBestColor(hand) {
   const counts = { red: 0, green: 0, blue: 0, yellow: 0 };
   hand.forEach(c => {
@@ -239,13 +250,13 @@ function chooseBestColor(hand) {
   });
   return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
 }
- 
+
 function botChooseCard(hand, topCard, currentColor, mustDraw) {
   const playable = hand.map((card, i) => ({ card, i }))
     .filter(({ card }) => canPlay(card, topCard, currentColor, mustDraw));
- 
+
   if (playable.length === 0) return null;
- 
+
   const priority = (card) => {
     if (card.value === 'wild4') return 7;
     if (card.value === 'draw2') return 6;
@@ -255,24 +266,24 @@ function botChooseCard(hand, topCard, currentColor, mustDraw) {
     if (card.value === 'wild') return 2;
     return 1;
   };
- 
+
   playable.sort((a, b) => {
     const diff = priority(b.card) - priority(a.card);
     return diff !== 0 ? diff : Math.random() - 0.5;
   });
- 
+
   return playable[0];
 }
- 
+
 function botTakeTurn(room, botIndex) {
   const bot = room.players[botIndex];
   if (!bot || !bot.isBot) return;
   if (room.currentPlayerIndex !== botIndex) return;
   if (room.gameState !== 'playing') return;
- 
+
   const topCard = getTopCard(room);
   const chosen = botChooseCard(bot.hand, topCard, room.currentColor, room.mustDraw);
- 
+
   if (!chosen) {
     applyDrawCard(room, botIndex);
     broadcastState(room);
@@ -280,40 +291,40 @@ function botTakeTurn(room, botIndex) {
     scheduleNextBotTurn(room);
     return;
   }
- 
+
   let chosenColor = null;
   if (chosen.card.type === 'wild' || chosen.card.type === 'wild4') {
     chosenColor = chooseBestColor(bot.hand);
   }
- 
+
   if (bot.hand.length === 2) {
     bot.saidUno = true;
     setTimeout(() => {
       io.to(room.id).emit('chatMessage', { type: 'uno', message: `🎴 ${bot.name}: UNO!!!` });
     }, 200);
   }
- 
+
   const result = applyPlayCard(room, botIndex, chosen.i, chosenColor);
- 
+
   if (Math.random() < 0.3) {
     const comment = getBotRandomComment('play');
     setTimeout(() => {
       io.to(room.id).emit('chatMessage', { type: 'player', playerName: bot.name, message: comment });
     }, 300);
   }
- 
+
   io.to(room.id).emit('cardPlayed', { playerName: bot.name, card: chosen.card });
- 
+
   if (result && result.won) {
     broadcastState(room);
     io.to(room.id).emit('chatMessage', { type: 'system', message: `🏆 ${bot.name} g'olib bo'ldi!` });
     return;
   }
- 
+
   broadcastState(room);
   scheduleNextBotTurn(room);
 }
- 
+
 function scheduleNextBotTurn(room) {
   if (room.gameState !== 'playing') return;
   const currentPlayer = room.players[room.currentPlayerIndex];
@@ -326,9 +337,8 @@ function scheduleNextBotTurn(room) {
     }, delay);
   }
 }
- 
+
 // ==================== GAME START ====================
- 
 function startGame(room) {
   room.deck = shuffleDeck(createDeck());
   room.gameState = 'playing';
@@ -336,12 +346,12 @@ function startGame(room) {
   room.pendingDraw = 0;
   room.mustDraw = false;
   room.winner = null;
- 
+
   room.players.forEach(player => {
     player.hand = room.deck.splice(0, 7);
     player.saidUno = false;
   });
- 
+
   let firstCard;
   do {
     firstCard = room.deck.shift();
@@ -349,7 +359,7 @@ function startGame(room) {
       room.deck.push(firstCard);
     }
   } while (firstCard.type === 'wild' || firstCard.type === 'wild4');
- 
+
   room.discardPile = [firstCard];
   
   for (let i = 0; i < 3; i++) {
@@ -357,20 +367,166 @@ function startGame(room) {
       room.discardPile.push(room.deck.shift());
     }
   }
- 
+
   room.currentColor = firstCard.color;
   room.currentPlayerIndex = 0;
   
   startTurnTimer(room);
   scheduleNextBotTurn(room);
 }
- 
+
+// ==================== AUTH ROUTES ====================
+app.post('/api/register', (req, res) => {
+  const { username, password, displayName, avatar } = req.body;
+  
+  // Validation
+  if (!username || !password || !displayName) {
+    return res.status(400).json({ error: 'Barcha maydonlarni to\'ldiring!' });
+  }
+  
+  if (username.length < 3 || username.length > 20) {
+    return res.status(400).json({ error: 'Username 3-20 belgi orasida bo\'lishi kerak!' });
+  }
+  
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return res.status(400).json({ error: 'Username faqat harf, raqam va _ dan iborat bo\'lishi kerak!' });
+  }
+  
+  if (password.length < 4) {
+    return res.status(400).json({ error: 'Parol kamida 4 belgi bo\'lishi kerak!' });
+  }
+  
+  if (users.has(username)) {
+    return res.status(400).json({ error: 'Bu username band!' });
+  }
+  
+  // Hash password (simple for demo - use bcrypt in production)
+  const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+  
+  users.set(username, {
+    username,
+    password: hashedPassword,
+    displayName,
+    avatar: avatar || DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)],
+    createdAt: Date.now(),
+    stats: { wins: 0, losses: 0, gamesPlayed: 0 }
+  });
+  
+  const sessionToken = crypto.randomBytes(32).toString('hex');
+  sessions.set(sessionToken, username);
+  
+  res.json({ 
+    success: true, 
+    sessionToken,
+    user: {
+      username,
+      displayName,
+      avatar: users.get(username).avatar,
+      stats: users.get(username).stats
+    }
+  });
+});
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username va parolni kiriting!' });
+  }
+  
+  const user = users.get(username);
+  if (!user) {
+    return res.status(401).json({ error: 'Noto\'g\'ri username yoki parol!' });
+  }
+  
+  const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+  if (user.password !== hashedPassword) {
+    return res.status(401).json({ error: 'Noto\'g\'ri username yoki parol!' });
+  }
+  
+  const sessionToken = crypto.randomBytes(32).toString('hex');
+  sessions.set(sessionToken, username);
+  
+  res.json({ 
+    success: true, 
+    sessionToken,
+    user: {
+      username: user.username,
+      displayName: user.displayName,
+      avatar: user.avatar,
+      stats: user.stats
+    }
+  });
+});
+
+app.post('/api/logout', (req, res) => {
+  const { sessionToken } = req.body;
+  sessions.delete(sessionToken);
+  res.json({ success: true });
+});
+
+app.get('/api/user/:username', (req, res) => {
+  const user = users.get(req.params.username);
+  if (!user) {
+    return res.status(404).json({ error: 'User topilmadi' });
+  }
+  res.json({
+    username: user.username,
+    displayName: user.displayName,
+    avatar: user.avatar,
+    stats: user.stats
+  });
+});
+
+app.post('/api/update-profile', (req, res) => {
+  const { sessionToken, displayName, avatar } = req.body;
+  
+  const username = sessions.get(sessionToken);
+  if (!username) {
+    return res.status(401).json({ error: 'Avtorizatsiyadan o\'tmagan' });
+  }
+  
+  const user = users.get(username);
+  if (displayName) user.displayName = displayName;
+  if (avatar) user.avatar = avatar;
+  
+  users.set(username, user);
+  
+  res.json({ success: true, user: {
+    username: user.username,
+    displayName: user.displayName,
+    avatar: user.avatar,
+    stats: user.stats
+  }});
+});
+
 // ==================== SOCKET.IO ====================
- 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
- 
-  socket.on('createRoom', ({ playerName, privacy, maxPlayers }) => {
+  
+  // Store user data on socket
+  socket.userData = null;
+
+  socket.on('auth', ({ sessionToken }) => {
+    const username = sessions.get(sessionToken);
+    if (username) {
+      const user = users.get(username);
+      socket.userData = {
+        username: user.username,
+        displayName: user.displayName,
+        avatar: user.avatar
+      };
+      socket.emit('authSuccess', socket.userData);
+    } else {
+      socket.emit('authFailed');
+    }
+  });
+
+  socket.on('createRoom', ({ privacy, maxPlayers }) => {
+    if (!socket.userData) {
+      return socket.emit('error', { message: 'Avval tizimga kiring!' });
+    }
+    
     const roomId = Math.random().toString(36).substr(2, 9).toUpperCase();
     
     rooms[roomId] = {
@@ -381,34 +537,62 @@ io.on('connection', (socket) => {
       privacy: privacy || 'open',
       maxPlayers: maxPlayers || 8
     };
+    
     const room = rooms[roomId];
-    room.players.push({ id: socket.id, name: playerName, hand: [], saidUno: false, isBot: false });
+    room.players.push({ 
+      id: socket.id, 
+      name: socket.userData.displayName,
+      username: socket.userData.username,
+      avatar: socket.userData.avatar,
+      hand: [], saidUno: false, isBot: false 
+    });
     socket.join(roomId);
     socket.roomId = roomId;
-    socket.playerName = playerName;
- 
+
     socket.emit('roomCreated', { roomId });
     socket.emit('gameUpdate', buildGameState(room, socket.id));
     io.emit('roomListUpdate', getRoomList());
-    console.log(`Room ${roomId} created by ${playerName}`);
+    console.log(`Room ${roomId} created by ${socket.userData.displayName}`);
   });
- 
-  socket.on('joinRoom', ({ roomId, playerName }) => {
+
+  socket.on('joinRoom', ({ roomId }) => {
+    if (!socket.userData) {
+      return socket.emit('error', { message: 'Avval tizimga kiring!' });
+    }
+    
     const room = getRoom(roomId);
-    if (!room) return socket.emit('error', { message: 'Xona topilmadi!' });
-    if (room.gameState !== 'waiting') return socket.emit('error', { message: 'O\'yin boshlangan!' });
-    if (room.players.length >= room.maxPlayers) return socket.emit('error', { message: `Xona to\'lgan! (maks ${room.maxPlayers})` });
- 
-    room.players.push({ id: socket.id, name: playerName, hand: [], saidUno: false, isBot: false });
+    if (!room) {
+      return socket.emit('error', { message: 'Xona topilmadi!' });
+    }
+    
+    // Check if already in room
+    if (room.players.some(p => p.id === socket.id)) {
+      return socket.emit('error', { message: 'Siz allaqachon bu xonadasiz!' });
+    }
+    
+    if (room.gameState !== 'waiting') {
+      return socket.emit('error', { message: 'O\'yin allaqachon boshlangan!' });
+    }
+    
+    if (room.players.length >= room.maxPlayers) {
+      return socket.emit('error', { message: `Xona to\'lgan! (maks ${room.maxPlayers})` });
+    }
+    
+    room.players.push({ 
+      id: socket.id, 
+      name: socket.userData.displayName,
+      username: socket.userData.username,
+      avatar: socket.userData.avatar,
+      hand: [], saidUno: false, isBot: false 
+    });
     socket.join(roomId);
     socket.roomId = roomId;
-    socket.playerName = playerName;
- 
+
     broadcastState(room);
-    io.to(roomId).emit('chatMessage', { type: 'system', message: `${playerName} xonaga qo'shildi!` });
+    io.to(roomId).emit('chatMessage', { type: 'system', message: `${socket.userData.displayName} xonaga qo'shildi!` });
     io.emit('roomListUpdate', getRoomList());
   });
- 
+
   socket.on('setRoomPrivacy', ({ privacy }) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
@@ -422,68 +606,70 @@ io.on('connection', (socket) => {
     broadcastState(room);
     io.emit('roomListUpdate', getRoomList());
   });
- 
+
   socket.on('addBot', ({ difficulty }) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
     if (room.host !== socket.id) return socket.emit('error', { message: 'Faqat host bot qo\'sha oladi!' });
     if (room.gameState !== 'waiting') return socket.emit('error', { message: 'O\'yin boshlangan!' });
     if (room.players.length >= room.maxPlayers) return socket.emit('error', { message: `Xona to\'lgan! (maks ${room.maxPlayers})` });
- 
+
     const botCount = room.players.filter(p => p.isBot).length;
     const botName = BOT_NAMES[botCount % BOT_NAMES.length];
     const botId = `BOT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
- 
+
     room.players.push({
       id: botId,
       name: botName,
+      displayName: botName,
+      avatar: '/avatars/bot.svg',
       hand: [],
       saidUno: false,
       isBot: true,
       difficulty: difficulty || 'medium'
     });
- 
+
     broadcastState(room);
     io.to(socket.roomId).emit('chatMessage', { type: 'system', message: `🤖 ${botName} xonaga qo'shildi!` });
     io.emit('roomListUpdate', getRoomList());
   });
- 
+
   socket.on('removeBot', ({ botId }) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
     if (room.host !== socket.id) return;
     if (room.gameState !== 'waiting') return;
- 
+
     const bot = room.players.find(p => p.id === botId && p.isBot);
     if (!bot) return;
- 
+
     room.players = room.players.filter(p => p.id !== botId);
     broadcastState(room);
     io.to(socket.roomId).emit('chatMessage', { type: 'system', message: `🤖 ${bot.name} xonadan chiqarildi.` });
     io.emit('roomListUpdate', getRoomList());
   });
- 
+
   socket.on('getRoomList', () => socket.emit('roomListUpdate', getRoomList()));
- 
+
   socket.on('startGame', () => {
     const room = getRoom(socket.roomId);
     if (!room) return;
     if (room.host !== socket.id) return socket.emit('error', { message: 'Faqat host boshlashi mumkin!' });
     if (room.players.filter(p => !p.isBot).length < 1) return socket.emit('error', { message: 'Kamida 1 haqiqiy o\'yinchi kerak!' });
- 
+
     startGame(room);
     broadcastState(room);
     io.to(socket.roomId).emit('gameStarted');
     io.to(socket.roomId).emit('chatMessage', { type: 'system', message: '🎮 O\'yin boshlandi! Yaxshi o\'yin!' });
     io.emit('roomListUpdate', getRoomList());
- 
+
     scheduleNextBotTurn(room);
   });
- 
+
   socket.on('playCard', ({ cardIndex, chosenColor }) => {
     const room = getRoom(socket.roomId);
     if (!room || room.gameState !== 'playing') return;
- 
+
     const player = room.players.find(p => p.id === socket.id);
     if (!player) return;
     
@@ -493,8 +679,8 @@ io.on('connection', (socket) => {
     
     const topCard = getTopCard(room);
     
-    // Jump-In logic: exact match of color and value (not wild)
-    const isJumpIn = (!isCurrentPlayer && card.type !== 'wild' && card.type !== 'wild4' && card.color === topCard.color && card.value === topCard.value);
+    const isJumpIn = (!isCurrentPlayer && card.type !== 'wild' && card.type !== 'wild4' && 
+                      card.color === topCard.color && card.value === topCard.value);
     
     if (!isCurrentPlayer && !isJumpIn) {
       return socket.emit('error', { message: 'Siz navbatda emassiz!' });
@@ -512,36 +698,46 @@ io.on('connection', (socket) => {
       room.currentPlayerIndex = room.players.indexOf(player);
       io.to(room.id).emit('chatMessage', { type: 'system', message: `⚡ ${player.name} JUMP-IN qildi!` });
     }
- 
+
     const result = applyPlayCard(room, room.currentPlayerIndex, cardIndex, chosenColor);
- 
-    io.to(socket.roomId).emit('cardPlayed', { playerName: currentPlayer.name, card });
- 
+
+    io.to(socket.roomId).emit('cardPlayed', { playerName: player.name, card });
+
     if (result && result.won) {
       broadcastState(room);
-      io.to(socket.roomId).emit('chatMessage', { type: 'system', message: `🏆 ${currentPlayer.name} g'olib bo'ldi!` });
+      io.to(socket.roomId).emit('chatMessage', { type: 'system', message: `🏆 ${player.name} g'olib bo'ldi!` });
       io.emit('roomListUpdate', getRoomList());
+      
+      // Update user stats
+      if (socket.userData) {
+        const user = users.get(socket.userData.username);
+        if (user) {
+          user.stats.wins++;
+          user.stats.gamesPlayed++;
+          users.set(socket.userData.username, user);
+        }
+      }
       return;
     }
- 
+
     broadcastState(room);
     scheduleNextBotTurn(room);
   });
- 
+
   socket.on('drawCard', () => {
     const room = getRoom(socket.roomId);
     if (!room || room.gameState !== 'playing') return;
- 
+
     const currentPlayer = room.players[room.currentPlayerIndex];
     if (!currentPlayer || currentPlayer.id !== socket.id) {
       return socket.emit('error', { message: 'Siz navbatda emassiz!' });
     }
- 
+
     applyDrawCard(room, room.currentPlayerIndex);
     broadcastState(room);
     scheduleNextBotTurn(room);
   });
- 
+
   socket.on('sayUno', () => {
     const room = getRoom(socket.roomId);
     if (!room) return;
@@ -552,7 +748,7 @@ io.on('connection', (socket) => {
       broadcastState(room);
     }
   });
- 
+
   socket.on('catchUno', ({ targetId }) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
@@ -567,14 +763,13 @@ io.on('connection', (socket) => {
       broadcastState(room);
     }
   });
- 
-  // TUZATILGAN: sendChat emas, chat event ishlatiladi
+
   socket.on('chat', ({ message }) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
     const player = room.players.find(p => p.id === socket.id);
     if (player) {
-      io.to(socket.roomId).emit('chatMessage', { type: 'player', playerName: player.name, message });
+      io.to(socket.roomId).emit('chatMessage', { type: 'player', playerName: player.name, message: message.substring(0, 200) });
     }
   });
   
@@ -584,22 +779,12 @@ io.on('connection', (socket) => {
     io.to(socket.roomId).emit('reaction', { playerId: socket.id, emoji });
   });
   
-  // Eski clientlar uchun sendChat ni ham qo'llab-quvvatlash
-  socket.on('sendChat', ({ message }) => {
-    const room = getRoom(socket.roomId);
-    if (!room) return;
-    const player = room.players.find(p => p.id === socket.id);
-    if (player) {
-      io.to(socket.roomId).emit('chatMessage', { type: 'player', playerName: player.name, message });
-    }
-  });
- 
   socket.on('leaveRoom', () => {
     const room = getRoom(socket.roomId);
     if (!room) return;
- 
+
     room.players = room.players.filter(p => p.id !== socket.id);
- 
+
     if (room.players.length === 0) {
       delete rooms[socket.roomId];
       console.log(`Room ${socket.roomId} deleted`);
@@ -611,16 +796,16 @@ io.on('connection', (socket) => {
       broadcastState(room);
       io.to(socket.roomId).emit('chatMessage', { type: 'system', message: `Bir o'yinchi xonadan chiqdi.` });
     }
- 
+
     io.emit('roomListUpdate', getRoomList());
   });
- 
+
   socket.on('disconnect', () => {
     const room = getRoom(socket.roomId);
     if (!room) return;
- 
+
     room.players = room.players.filter(p => p.id !== socket.id);
- 
+
     if (room.players.length === 0) {
       delete rooms[socket.roomId];
       console.log(`Room ${socket.roomId} deleted`);
@@ -631,12 +816,11 @@ io.on('connection', (socket) => {
       }
       broadcastState(room);
     }
- 
+
     io.emit('roomListUpdate', getRoomList());
   });
 });
- 
+
 // ==================== SERVER ====================
- 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`🎮 UNO server running on port ${PORT}`));

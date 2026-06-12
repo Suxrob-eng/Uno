@@ -1,40 +1,101 @@
 // ==========================================
-//   UNO ONLINE - CLIENT GAME LOGIC (TUZATILGAN)
+//   UNO ONLINE - CLIENT GAME LOGIC (COMPLETE REWRITE)
 // ==========================================
 
-const socket = io();
+let socket = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
-// ==================== STATE ====================
+// ==================== AUTH STATE ====================
+let authState = {
+  isAuthenticated: false,
+  sessionToken: null,
+  user: null,
+  loading: false
+};
+
+// ==================== GAME STATE ====================
 let state = {
-  screen: 'lobby',
+  screen: 'auth',
   roomId: null,
   myId: null,
-  playerName: '',
   isHost: false,
   gameState: null,
   pendingCard: null,
   chatOpen: false,
   unreadChat: 0,
-  sortMethod: 'none'
+  sortMethod: 'none',
+  isLoading: false
 };
- 
-let turnTimerInterval;
+
+let turnTimerInterval = null;
 
 // ==================== DOM REFERENCES ====================
 const screens = {
+  auth: document.getElementById('auth-screen'),
   lobby: document.getElementById('lobby-screen'),
   waiting: document.getElementById('waiting-screen'),
   game: document.getElementById('game-screen')
 };
 
+const loadingOverlay = document.getElementById('loading-overlay');
+const loadingText = document.getElementById('loading-text');
+
+function showLoading(message = 'Yuklanmoqda...') {
+  if (loadingOverlay) {
+    loadingText.textContent = message;
+    loadingOverlay.classList.remove('hidden');
+    state.isLoading = true;
+  }
+}
+
+function hideLoading() {
+  if (loadingOverlay) {
+    loadingOverlay.classList.add('hidden');
+    state.isLoading = false;
+  }
+}
+
 const els = {
-  playerName: document.getElementById('player-name'),
+  // Auth elements
+  loginTab: document.getElementById('login-tab'),
+  registerTab: document.getElementById('register-tab'),
+  loginForm: document.getElementById('login-form'),
+  registerForm: document.getElementById('register-form'),
+  loginUsername: document.getElementById('login-username'),
+  loginPassword: document.getElementById('login-password'),
+  loginBtn: document.getElementById('login-btn'),
+  registerUsername: document.getElementById('register-username'),
+  registerPassword: document.getElementById('register-password'),
+  registerDisplayName: document.getElementById('register-displayname'),
+  registerAvatar: document.getElementById('register-avatar'),
+  registerBtn: document.getElementById('register-btn'),
+  authError: document.getElementById('auth-error'),
+  
+  // Profile elements
+  profileSidebar: document.getElementById('profile-sidebar'),
+  profileToggle: document.getElementById('profile-toggle'),
+  closeProfileBtn: document.getElementById('close-profile-btn'),
+  profileUsername: document.getElementById('profile-username'),
+  profileDisplayName: document.getElementById('profile-displayname'),
+  profileAvatar: document.getElementById('profile-avatar'),
+  profileWins: document.getElementById('profile-wins'),
+  profileGames: document.getElementById('profile-games'),
+  editProfileBtn: document.getElementById('edit-profile-btn'),
+  saveProfileBtn: document.getElementById('save-profile-btn'),
+  editDisplayName: document.getElementById('edit-displayname'),
+  editAvatar: document.getElementById('edit-avatar'),
+  profileEditSection: document.getElementById('profile-edit-section'),
+  logoutBtn: document.getElementById('logout-btn'),
+  
+  // Lobby elements
+  playerNameDisplay: document.getElementById('player-name-display'),
+  playerAvatar: document.getElementById('player-avatar'),
   createRoomBtn: document.getElementById('create-room-btn'),
   roomCode: document.getElementById('room-code'),
   joinRoomBtn: document.getElementById('join-room-btn'),
   refreshRoomsBtn: document.getElementById('refresh-rooms-btn'),
   roomsList: document.getElementById('rooms-list'),
-
   roomCodeDisplay: document.getElementById('room-code-display'),
   copyCodeBtn: document.getElementById('copy-code-btn'),
   waitingPlayers: document.getElementById('waiting-players'),
@@ -44,7 +105,6 @@ const els = {
   startGameBtn: document.getElementById('start-game-btn'),
   waitingMessage: document.getElementById('waiting-message'),
   leaveRoomBtn: document.getElementById('leave-room-btn'),
-
   otherPlayers: document.getElementById('other-players'),
   topCard: document.getElementById('top-card'),
   currentColorBadge: document.getElementById('current-color-badge'),
@@ -55,17 +115,15 @@ const els = {
   myHand: document.getElementById('my-hand'),
   myNameDisplay: document.getElementById('my-name-display'),
   myCardCount: document.getElementById('my-card-count'),
-
+  myAvatar: document.getElementById('my-avatar'),
   unoBtn: document.getElementById('uno-btn'),
   catchUnoBtn: document.getElementById('catch-uno-btn'),
-
   chatPanel: document.getElementById('chat-panel'),
   toggleChatBtn: document.getElementById('toggle-chat-btn'),
   chatToggleBtn: document.getElementById('chat-toggle-btn'),
   chatMessages: document.getElementById('chat-messages'),
   chatInput: document.getElementById('chat-input'),
   sendChatBtn: document.getElementById('send-chat-btn'),
-
   colorPicker: document.getElementById('color-picker'),
   winModal: document.getElementById('win-modal'),
   winTitle: document.getElementById('win-title'),
@@ -74,7 +132,6 @@ const els = {
   goLobbyBtn: document.getElementById('go-lobby-btn'),
   sortColorBtn: document.getElementById('sort-color-btn'),
   sortValueBtn: document.getElementById('sort-value-btn'),
-
   errorToast: document.getElementById('error-toast'),
   notifToast: document.getElementById('notif-toast')
 };
@@ -113,7 +170,323 @@ function showNotif(msg) {
   notifTimeout = setTimeout(() => els.notifToast.classList.add('hidden'), 3000);
 }
 
-// ==================== CARD RENDERING ====================
+// ==================== AUTH FUNCTIONS ====================
+function initSocket() {
+  if (socket && socket.connected) {
+    socket.disconnect();
+  }
+  
+  socket = io({
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+    reconnectionDelay: 1000
+  });
+  
+  socket.on('connect', () => {
+    console.log('Socket connected');
+    if (authState.sessionToken) {
+      socket.emit('auth', { sessionToken: authState.sessionToken });
+    }
+    socket.emit('getRoomList');
+  });
+  
+  socket.on('connect_error', (error) => {
+    console.error('Socket connection error:', error);
+    showError('Serverga ulanishda xatolik!');
+  });
+  
+  socket.on('authSuccess', (userData) => {
+    authState.user = userData;
+    authState.isAuthenticated = true;
+    updateProfileUI();
+    showScreen('lobby');
+    hideLoading();
+    socket.emit('getRoomList');
+  });
+  
+  socket.on('authFailed', () => {
+    logout();
+  });
+  
+  setupSocketEvents();
+}
+
+function setupSocketEvents() {
+  socket.on('roomCreated', ({ roomId }) => {
+    state.roomId = roomId;
+    state.isHost = true;
+    if (els.roomCodeDisplay) els.roomCodeDisplay.textContent = roomId;
+    showScreen('waiting');
+    hideLoading();
+  });
+
+  socket.on('gameUpdate', (gs) => {
+    if (!gs) return;
+    if (state.screen === 'waiting') {
+      updateWaitingRoom(gs);
+    } else if (state.screen === 'game') {
+      updateGameUI(gs);
+    }
+    if (gs.gameState === 'waiting' && state.roomId && state.screen === 'lobby') {
+      showScreen('waiting');
+      updateWaitingRoom(gs);
+    }
+    hideLoading();
+  });
+
+  socket.on('gameStarted', () => {
+    showScreen('game');
+    hideLoading();
+  });
+
+  socket.on('roomListUpdate', (rooms) => {
+    if (state.screen !== 'lobby' || !els.roomsList) return;
+    els.roomsList.innerHTML = '';
+    if (!rooms || rooms.length === 0) {
+      els.roomsList.innerHTML = '<div class="no-rooms">Hozircha xona yo\'q</div>';
+      return;
+    }
+    rooms.forEach(room => {
+      const div = document.createElement('div');
+      div.className = 'room-item';
+      div.innerHTML = `
+        <div>
+          <div class="room-item-info">${escapeHtml(room.id)}</div>
+          <div class="room-item-count">Host: ${escapeHtml(room.host)} · ${room.playerCount}/${room.maxPlayers}</div>
+        </div>
+        <button class="join-btn-small" data-room="${room.id}">Qo'shilish</button>
+      `;
+      const joinBtn = div.querySelector('.join-btn-small');
+      joinBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        joinRoom(room.id);
+      });
+      els.roomsList.appendChild(div);
+    });
+  });
+
+  socket.on('chatMessage', data => addChatMessage(data));
+
+  socket.on('cardPlayed', ({ playerName, card, botDrew }) => {
+    if (playerName !== authState.user?.displayName) {
+      if (botDrew) {
+        showNotif(`🤖 ${playerName} karta oldi`);
+      } else if (card) {
+        const label = getCardLabel(card);
+        showNotif(`${playerName}: ${label}`);
+      }
+    }
+  });
+
+  socket.on('error', ({ message }) => showError(message));
+  
+  socket.on('reaction', ({ playerId, emoji }) => {
+    showFloatingReaction(playerId, emoji);
+  });
+}
+
+async function register() {
+  const username = els.registerUsername?.value.trim();
+  const password = els.registerPassword?.value;
+  const displayName = els.registerDisplayName?.value.trim();
+  const avatar = els.registerAvatar?.value || null;
+  
+  if (!username || !password || !displayName) {
+    showAuthError('Barcha maydonlarni to\'ldiring!');
+    return;
+  }
+  
+  if (username.length < 3 || username.length > 20) {
+    showAuthError('Username 3-20 belgi orasida bo\'lishi kerak!');
+    return;
+  }
+  
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    showAuthError('Username faqat harf, raqam va _ dan iborat bo\'lishi kerak!');
+    return;
+  }
+  
+  if (password.length < 4) {
+    showAuthError('Parol kamida 4 belgi bo\'lishi kerak!');
+    return;
+  }
+  
+  showLoading('Ro\'yxatdan o\'tkazilmoqda...');
+  
+  try {
+    const response = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, displayName, avatar })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      authState.sessionToken = data.sessionToken;
+      authState.user = data.user;
+      authState.isAuthenticated = true;
+      localStorage.setItem('uno_session', data.sessionToken);
+      updateProfileUI();
+      initSocket();
+      showScreen('lobby');
+      hideLoading();
+    } else {
+      showAuthError(data.error || 'Ro\'yxatdan o\'tishda xatolik!');
+      hideLoading();
+    }
+  } catch (error) {
+    console.error('Register error:', error);
+    showAuthError('Server bilan bog\'lanishda xatolik!');
+    hideLoading();
+  }
+}
+
+async function login() {
+  const username = els.loginUsername?.value.trim();
+  const password = els.loginPassword?.value;
+  
+  if (!username || !password) {
+    showAuthError('Username va parolni kiriting!');
+    return;
+  }
+  
+  showLoading('Tizimga kirilmoqda...');
+  
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      authState.sessionToken = data.sessionToken;
+      authState.user = data.user;
+      authState.isAuthenticated = true;
+      localStorage.setItem('uno_session', data.sessionToken);
+      updateProfileUI();
+      initSocket();
+      showScreen('lobby');
+      hideLoading();
+    } else {
+      showAuthError(data.error || 'Login yoki parol noto\'g\'ri!');
+      hideLoading();
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    showAuthError('Server bilan bog\'lanishda xatolik!');
+    hideLoading();
+  }
+}
+
+function logout() {
+  if (authState.sessionToken) {
+    fetch('/api/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken: authState.sessionToken })
+    }).catch(console.error);
+  }
+  
+  authState.isAuthenticated = false;
+  authState.sessionToken = null;
+  authState.user = null;
+  localStorage.removeItem('uno_session');
+  
+  if (socket) {
+    socket.disconnect();
+  }
+  
+  showScreen('auth');
+  clearAuthForm();
+}
+
+function showAuthError(message) {
+  if (els.authError) {
+    els.authError.textContent = message;
+    els.authError.classList.remove('hidden');
+    setTimeout(() => {
+      if (els.authError) els.authError.classList.add('hidden');
+    }, 3000);
+  }
+}
+
+function clearAuthForm() {
+  if (els.loginUsername) els.loginUsername.value = '';
+  if (els.loginPassword) els.loginPassword.value = '';
+  if (els.registerUsername) els.registerUsername.value = '';
+  if (els.registerPassword) els.registerPassword.value = '';
+  if (els.registerDisplayName) els.registerDisplayName.value = '';
+  if (els.registerAvatar) els.registerAvatar.value = '';
+}
+
+function updateProfileUI() {
+  if (authState.user) {
+    if (els.playerNameDisplay) els.playerNameDisplay.textContent = authState.user.displayName;
+    if (els.playerAvatar) els.playerAvatar.src = authState.user.avatar || '/avatars/default1.svg';
+    if (els.myNameDisplay) els.myNameDisplay.textContent = authState.user.displayName;
+    if (els.myAvatar) els.myAvatar.src = authState.user.avatar || '/avatars/default1.svg';
+    if (els.profileUsername) els.profileUsername.textContent = authState.user.username;
+    if (els.profileDisplayName) els.profileDisplayName.textContent = authState.user.displayName;
+    if (els.profileAvatar) els.profileAvatar.src = authState.user.avatar || '/avatars/default1.svg';
+    if (els.profileWins) els.profileWins.textContent = authState.user.stats?.wins || 0;
+    if (els.profileGames) els.profileGames.textContent = authState.user.stats?.gamesPlayed || 0;
+  }
+}
+
+function toggleProfile() {
+  if (els.profileSidebar) {
+    els.profileSidebar.classList.toggle('open');
+  }
+}
+
+async function saveProfile() {
+  const displayName = els.editDisplayName?.value.trim();
+  const avatar = els.editAvatar?.value;
+  
+  if (!displayName) {
+    showError('Ko\'rsatiladigan ism bo\'sh bo\'lishi mumkin emas!');
+    return;
+  }
+  
+  showLoading('Profilyangiz saqlanmoqda...');
+  
+  try {
+    const response = await fetch('/api/update-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionToken: authState.sessionToken,
+        displayName,
+        avatar: avatar || authState.user.avatar
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      authState.user = data.user;
+      updateProfileUI();
+      if (els.profileEditSection) els.profileEditSection.style.display = 'none';
+      showNotif('Profil muvaffaqiyatli yangilandi!');
+      hideLoading();
+    } else {
+      showError(data.error || 'Profilni yangilashda xatolik!');
+      hideLoading();
+    }
+  } catch (error) {
+    console.error('Profile update error:', error);
+    showError('Server bilan bog\'lanishda xatolik!');
+    hideLoading();
+  }
+}
+
+// ==================== CARD FUNCTIONS ====================
 function getCardLabel(card) {
   if (!card) return '?';
   const labels = { 'skip': '⊘', 'reverse': '↺', 'draw2': '+2', 'wild': '★', 'wild4': '+4' };
@@ -135,17 +508,15 @@ function createCardElement(card, isPlayable = true) {
 }
 
 function renderTopCard(card) {
-  if (!card) return;
+  if (!card || !els.topCard) return;
   const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
   const label = getCardLabel(card);
-  if (els.topCard) {
-    els.topCard.className = `card top-card ${colorClass}`;
-    els.topCard.innerHTML = `
-      <span class="card-corner tl">${label}</span>
-      <span class="card-value-center">${label}</span>
-      <span class="card-corner br">${label}</span>
-    `;
-  }
+  els.topCard.className = `card top-card ${colorClass}`;
+  els.topCard.innerHTML = `
+    <span class="card-corner tl">${label}</span>
+    <span class="card-value-center">${label}</span>
+    <span class="card-corner br">${label}</span>
+  `;
 }
 
 function getColorName(color) {
@@ -184,7 +555,7 @@ function updateGameUI(gs) {
     const bar = document.getElementById('turn-timer-bar');
     if (container && bar) {
       container.style.display = 'block';
-      clearInterval(turnTimerInterval);
+      if (turnTimerInterval) clearInterval(turnTimerInterval);
       
       const updateTimer = () => {
         const elapsed = Date.now() - gs.turnStartTime;
@@ -209,11 +580,10 @@ function updateGameUI(gs) {
   } else {
     const container = document.getElementById('turn-timer-container');
     if (container) container.style.display = 'none';
-    clearInterval(turnTimerInterval);
+    if (turnTimerInterval) clearInterval(turnTimerInterval);
   }
 
   if (me) {
-    if (els.myNameDisplay) els.myNameDisplay.textContent = me.name;
     if (els.myCardCount) els.myCardCount.textContent = `${me.cardCount} karta`;
   }
 
@@ -273,7 +643,8 @@ function renderMyHand(gs, isMyTurn) {
   mappedHand.forEach((cardObj) => {
     const card = cardObj;
     const index = cardObj.originalIndex;
-    const isJumpIn = (!isMyTurn && card.type !== 'wild' && card.type !== 'wild4' && card.color === gs.topCard?.color && card.value === gs.topCard?.value && !gs.mustDraw);
+    const isJumpIn = (!isMyTurn && card.type !== 'wild' && card.type !== 'wild4' && 
+                      card.color === gs.topCard?.color && card.value === gs.topCard?.value && !gs.mustDraw);
     const playable = (isMyTurn && gs.gameState === 'playing' && canPlayCard(card, gs.topCard, gs.currentColor, gs.mustDraw, isMyTurn)) || 
                      (gs.gameState === 'playing' && isJumpIn);
 
@@ -309,8 +680,9 @@ function renderOtherPlayers(gs) {
 
     area.innerHTML = `
       <div class="opponent-info">
+        <div class="opponent-avatar"><img src="${player.avatar || '/avatars/default1.svg'}" width="32" height="32" style="border-radius:50%"></div>
         <div class="opponent-name ${player.isCurrentPlayer ? 'active' : ''}">
-          ${escapeHtml(player.name)} ${player.isCurrentPlayer ? '▼' : ''}
+          ${escapeHtml(player.displayName || player.name)} ${player.isCurrentPlayer ? '▼' : ''}
         </div>
         ${player.isBot ? '<span class="bot-indicator">🤖 BOT</span>' : ''}
         <div class="card-count-badge">${player.cardCount} karta</div>
@@ -336,30 +708,9 @@ function onPlayCard(card, index) {
 function showColorPicker() { 
   if (els.colorPicker) els.colorPicker.classList.remove('hidden'); 
 }
+
 function hideColorPicker() { 
   if (els.colorPicker) els.colorPicker.classList.add('hidden'); 
-}
-
-if (document.querySelectorAll('.color-btn')) {
-  document.querySelectorAll('.color-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (state.pendingCard) {
-        socket.emit('playCard', { cardIndex: state.pendingCard.index, chosenColor: btn.dataset.color });
-        state.pendingCard = null;
-      }
-      hideColorPicker();
-    });
-  });
-}
-
-if (els.colorPicker) {
-  const backdrop = els.colorPicker.querySelector('.modal-backdrop');
-  if (backdrop) {
-    backdrop.addEventListener('click', () => {
-      state.pendingCard = null;
-      hideColorPicker();
-    });
-  }
 }
 
 // ==================== WIN MODAL ====================
@@ -385,17 +736,6 @@ function showWinModal(winner) {
 
   if (els.playAgainBtn) els.playAgainBtn.style.display = state.isHost ? 'block' : 'none';
   els.winModal.classList.remove('hidden');
-}
-
-if (els.playAgainBtn) {
-  els.playAgainBtn.addEventListener('click', () => {
-    socket.emit('playAgain');
-    if (els.winModal) els.winModal.classList.add('hidden');
-  });
-}
-
-if (els.goLobbyBtn) {
-  els.goLobbyBtn.addEventListener('click', () => location.reload());
 }
 
 // ==================== WAITING ROOM ====================
@@ -438,7 +778,7 @@ function updateWaitingRoom(gs) {
         ${p.isBot ? '🤖' : humanEmojis[i % 4]}
       </div>
       <div class="waiting-player-info">
-        <div class="waiting-player-name">${escapeHtml(p.name)}</div>
+        <div class="waiting-player-name">${escapeHtml(p.displayName || p.name)}</div>
         <div class="waiting-player-role">
           ${isMe ? 'Sen · ' : ''}${i === 0 ? 'Host' : 'O\'yinchi'}
           ${p.isBot ? '<span class="bot-badge">BOT</span>' : ''}
@@ -488,7 +828,7 @@ function addChatMessage(data) {
     div.className = 'chat-msg uno-msg';
     div.textContent = data.message;
   } else {
-    const isMe = data.playerName === state.playerName;
+    const isMe = data.playerName === authState.user?.displayName;
     div.className = `chat-msg ${isMe ? 'my-msg' : 'player-msg'}`;
     div.innerHTML = `
       ${!isMe ? `<div class="chat-sender">${escapeHtml(data.playerName)}</div>` : ''}
@@ -533,18 +873,76 @@ function toggleChat() {
   }
 }
 
-if (els.chatToggleBtn) els.chatToggleBtn.addEventListener('click', toggleChat);
-if (els.toggleChatBtn) els.toggleChatBtn.addEventListener('click', toggleChat);
-if (els.sendChatBtn) els.sendChatBtn.addEventListener('click', sendChat);
-if (els.chatInput) {
-  els.chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
-}
-
 function sendChat() {
   const msg = els.chatInput?.value.trim();
   if (!msg) return;
-  socket.emit('chat', { message: msg });
+  socket.emit('chat', { message: msg.substring(0, 200) });
   if (els.chatInput) els.chatInput.value = '';
+}
+
+// ==================== JOIN / CREATE ROOM ====================
+let isJoining = false;
+
+function joinRoom(roomId) {
+  if (isJoining) {
+    showNotif('Iltimos kuting, xonaga qo\'shilmoqda...');
+    return;
+  }
+  
+  if (!authState.isAuthenticated) {
+    showError('Avval tizimga kiring!');
+    return;
+  }
+  
+  isJoining = true;
+  showLoading('Xonaga qo\'shilmoqda...');
+  
+  socket.emit('joinRoom', { roomId });
+  
+  setTimeout(() => {
+    isJoining = false;
+  }, 3000);
+}
+
+function createRoom() {
+  if (!authState.isAuthenticated) {
+    showError('Avval tizimga kiring!');
+    return;
+  }
+  
+  const modal = document.getElementById('create-room-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function confirmCreateRoom() {
+  const selectedPrivacy = document.querySelector('.room-type-btn.active')?.dataset.type || 'open';
+  const maxPlayers = parseInt(document.getElementById('max-players-display')?.textContent || '8');
+  
+  showLoading('Xona yaratilmoqda...');
+  socket.emit('createRoom', { privacy: selectedPrivacy, maxPlayers });
+  
+  const modal = document.getElementById('create-room-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function showFloatingReaction(playerId, emoji) {
+  const el = document.createElement('div');
+  el.className = 'floating-reaction';
+  el.textContent = emoji;
+  
+  if (playerId === state.myId) {
+    const rect = document.querySelector('.player-area')?.getBoundingClientRect();
+    if (rect) {
+      el.style.left = (rect.left + rect.width / 2 - 16) + 'px';
+      el.style.top = (rect.top - 20) + 'px';
+    }
+  } else {
+    el.style.left = (Math.random() * 60 + 20) + '%';
+    el.style.top = '150px';
+  }
+  
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2000);
 }
 
 // ==================== UTILITY ====================
@@ -554,303 +952,238 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function validateName() {
-  const name = els.playerName?.value.trim();
-  if (!name) { showError('Iltimos, ismingizni kiriting!'); els.playerName?.focus(); return null; }
-  return name;
-}
-
-// ==================== LOBBY EVENTS ====================
-if (els.createRoomBtn) {
-  els.createRoomBtn.addEventListener('click', () => {
-    const name = validateName();
-    if (!name) return;
-    state.playerName = name;
-    const modal = document.getElementById('create-room-modal');
-    if (modal) modal.classList.remove('hidden');
-  });
-}
-
-// CREATE ROOM MODAL LOGIC
-const createModal = document.getElementById('create-room-modal');
-const typeOpen = document.getElementById('type-open');
-const typePrivate = document.getElementById('type-private');
-const checkOpen = document.getElementById('check-open');
-const checkPrivate = document.getElementById('check-private');
-const maxPlayersDisplay = document.getElementById('max-players-display');
-const countMinus = document.getElementById('count-minus');
-const countPlus = document.getElementById('count-plus');
-const confirmCreateBtn = document.getElementById('confirm-create-btn');
-const cancelCreateBtn = document.getElementById('cancel-create-btn');
-
-let selectedPrivacy = 'open';
-let selectedMaxPlayers = 8;
-if (maxPlayersDisplay) maxPlayersDisplay.textContent = selectedMaxPlayers;
-
-if (typeOpen) {
-  typeOpen.addEventListener('click', () => {
-    selectedPrivacy = 'open';
-    typeOpen.classList.add('active');
-    if (typePrivate) typePrivate.classList.remove('active');
-    if (checkOpen) checkOpen.classList.remove('hidden');
-    if (checkPrivate) checkPrivate.classList.add('hidden');
-  });
-}
-
-if (typePrivate) {
-  typePrivate.addEventListener('click', () => {
-    selectedPrivacy = 'private';
-    typePrivate.classList.add('active');
-    if (typeOpen) typeOpen.classList.remove('active');
-    if (checkPrivate) checkPrivate.classList.remove('hidden');
-    if (checkOpen) checkOpen.classList.add('hidden');
-  });
-}
-
-if (countMinus) {
-  countMinus.addEventListener('click', () => {
-    if (selectedMaxPlayers > 2) {
-      selectedMaxPlayers--;
-      if (maxPlayersDisplay) maxPlayersDisplay.textContent = selectedMaxPlayers;
-    }
-  });
-}
-
-if (countPlus) {
-  countPlus.addEventListener('click', () => {
-    if (selectedMaxPlayers < 8) {
-      selectedMaxPlayers++;
-      if (maxPlayersDisplay) maxPlayersDisplay.textContent = selectedMaxPlayers;
-    }
-  });
-}
-
-if (cancelCreateBtn) {
-  cancelCreateBtn.addEventListener('click', () => {
-    if (createModal) createModal.classList.add('hidden');
-  });
-}
-
-if (confirmCreateBtn) {
-  confirmCreateBtn.addEventListener('click', () => {
-    if (createModal) createModal.classList.add('hidden');
-    socket.emit('createRoom', { 
-      playerName: state.playerName,
-      privacy: selectedPrivacy,
-      maxPlayers: selectedMaxPlayers
+// ==================== EVENT LISTENERS ====================
+function initEventListeners() {
+  // Auth tabs
+  if (els.loginTab) {
+    els.loginTab.addEventListener('click', () => {
+      els.loginTab.classList.add('active');
+      if (els.registerTab) els.registerTab.classList.remove('active');
+      if (els.loginForm) els.loginForm.style.display = 'block';
+      if (els.registerForm) els.registerForm.style.display = 'none';
     });
-  });
-}
-
-if (els.joinRoomBtn) {
-  els.joinRoomBtn.addEventListener('click', () => {
-    const name = validateName();
-    if (!name) return;
+  }
+  
+  if (els.registerTab) {
+    els.registerTab.addEventListener('click', () => {
+      els.registerTab.classList.add('active');
+      if (els.loginTab) els.loginTab.classList.remove('active');
+      if (els.loginForm) els.loginForm.style.display = 'none';
+      if (els.registerForm) els.registerForm.style.display = 'block';
+    });
+  }
+  
+  if (els.loginBtn) els.loginBtn.addEventListener('click', login);
+  if (els.registerBtn) els.registerBtn.addEventListener('click', register);
+  if (els.logoutBtn) els.logoutBtn.addEventListener('click', logout);
+  if (els.profileToggle) els.profileToggle.addEventListener('click', toggleProfile);
+  if (els.closeProfileBtn) els.closeProfileBtn.addEventListener('click', toggleProfile);
+  
+  if (els.editProfileBtn) {
+    els.editProfileBtn.addEventListener('click', () => {
+      if (els.profileEditSection) {
+        els.profileEditSection.style.display = 'block';
+        if (els.editDisplayName) els.editDisplayName.value = authState.user?.displayName || '';
+        if (els.editAvatar) els.editAvatar.value = authState.user?.avatar || '';
+      }
+    });
+  }
+  
+  if (els.saveProfileBtn) els.saveProfileBtn.addEventListener('click', saveProfile);
+  
+  if (els.createRoomBtn) els.createRoomBtn.addEventListener('click', createRoom);
+  if (els.joinRoomBtn) els.joinRoomBtn.addEventListener('click', () => {
     const code = els.roomCode?.value.trim().toUpperCase();
-    if (!code) return showError('Xona kodini kiriting!');
-    state.playerName = name;
-    socket.emit('joinRoom', { roomId: code, playerName: name });
+    if (code) joinRoom(code);
+    else showError('Xona kodini kiriting!');
   });
-}
-
-if (els.refreshRoomsBtn) {
-  els.refreshRoomsBtn.addEventListener('click', () => socket.emit('getRoomList'));
-}
-if (els.playerName) {
-  els.playerName.addEventListener('keydown', e => { if (e.key === 'Enter' && els.createRoomBtn) els.createRoomBtn.click(); });
-}
-if (els.roomCode) {
-  els.roomCode.addEventListener('keydown', e => { if (e.key === 'Enter' && els.joinRoomBtn) els.joinRoomBtn.click(); });
-}
-
-// ==================== WAITING ROOM EVENTS ====================
-if (els.startGameBtn) {
-  els.startGameBtn.addEventListener('click', () => socket.emit('startGame'));
-}
-if (els.leaveRoomBtn) {
-  els.leaveRoomBtn.addEventListener('click', () => location.reload());
-}
-if (els.copyCodeBtn) {
-  els.copyCodeBtn.addEventListener('click', () => {
-    const code = els.roomCodeDisplay?.textContent;
-    if (code) {
-      navigator.clipboard.writeText(code)
-        .then(() => showNotif('📋 Kod nusxa olindi!'))
-        .catch(() => showNotif(`Kod: ${code}`));
-    }
-  });
-}
-
-if (els.addBotBtn) {
-  els.addBotBtn.addEventListener('click', () => {
-    const difficulty = els.botDifficulty?.value || 'medium';
-    socket.emit('addBot', { difficulty });
-  });
-}
-
-// ==================== GAME EVENTS ====================
-if (els.drawBtn) {
-  els.drawBtn.addEventListener('click', () => {
-    if (!els.drawBtn.classList.contains('disabled')) socket.emit('drawCard');
-  });
-}
-if (els.unoBtn) {
-  els.unoBtn.addEventListener('click', () => {
-    socket.emit('sayUno');
-    showNotif('🎴 UNO!');
-  });
-}
-if (els.catchUnoBtn) {
-  els.catchUnoBtn.addEventListener('click', () => {
-    const targetId = els.catchUnoBtn.dataset.targetId;
-    if (targetId) socket.emit('catchUno', { targetId });
-  });
-}
-
-// ==================== SOCKET EVENTS ====================
-socket.on('connect', () => {
-  state.myId = socket.id;
-  socket.emit('getRoomList');
-});
-
-socket.on('roomCreated', ({ roomId }) => {
-  state.roomId = roomId;
-  state.isHost = true;
-  if (els.roomCodeDisplay) els.roomCodeDisplay.textContent = roomId;
-  showScreen('waiting');
-});
-
-socket.on('gameUpdate', (gs) => {
-  if (!gs) return;
-  if (state.screen === 'waiting') {
-    const realPlayers = gs.players?.filter(p => !p.isBot) || [];
-    state.isHost = realPlayers.length > 0 && realPlayers[0]?.id === state.myId;
-    if (els.roomCodeDisplay && state.roomId) els.roomCodeDisplay.textContent = state.roomId;
-    updateWaitingRoom(gs);
-  } else if (state.screen === 'game') {
-    updateGameUI(gs);
-  }
-  if (gs.gameState === 'waiting' && state.roomId && state.screen === 'lobby') {
-    showScreen('waiting');
-    const realPlayers = gs.players?.filter(p => !p.isBot) || [];
-    state.isHost = realPlayers.length > 0 && realPlayers[0]?.id === state.myId;
-    updateWaitingRoom(gs);
-  }
-});
-
-socket.on('gameStarted', () => showScreen('game'));
-
-socket.on('roomListUpdate', (rooms) => {
-  if (state.screen !== 'lobby' || !els.roomsList) return;
-  els.roomsList.innerHTML = '';
-  if (!rooms || rooms.length === 0) {
-    els.roomsList.innerHTML = '<div class="no-rooms">Hozircha xona yo\'q</div>';
-    return;
-  }
-  rooms.forEach(room => {
-    const div = document.createElement('div');
-    div.className = 'room-item';
-    div.innerHTML = `
-      <div>
-        <div class="room-item-info">${escapeHtml(room.id)}</div>
-        <div class="room-item-count">Host: ${escapeHtml(room.host)} · ${room.playerCount}/${room.maxPlayers}</div>
-      </div>
-      <button class="join-btn-small" data-room="${room.id}">Qo'shilish</button>
-    `;
-    div.querySelector('.join-btn-small').addEventListener('click', () => {
-      if (els.roomCode) els.roomCode.value = room.id;
-      const name = els.playerName?.value.trim();
-      if (!name) { showError('Avval ismingizni kiriting!'); els.playerName?.focus(); return; }
-      state.playerName = name;
-      socket.emit('joinRoom', { roomId: room.id, playerName: name });
+  if (els.refreshRoomsBtn) els.refreshRoomsBtn.addEventListener('click', () => socket.emit('getRoomList'));
+  if (els.startGameBtn) els.startGameBtn.addEventListener('click', () => socket.emit('startGame'));
+  if (els.leaveRoomBtn) els.leaveRoomBtn.addEventListener('click', () => location.reload());
+  if (els.copyCodeBtn) {
+    els.copyCodeBtn.addEventListener('click', () => {
+      const code = els.roomCodeDisplay?.textContent;
+      if (code) {
+        navigator.clipboard.writeText(code)
+          .then(() => showNotif('📋 Kod nusxa olindi!'))
+          .catch(() => showNotif(`Kod: ${code}`));
+      }
     });
-    els.roomsList.appendChild(div);
-  });
-});
-
-socket.on('chatMessage', data => addChatMessage(data));
-
-socket.on('cardPlayed', ({ playerName, card, botDrew }) => {
-  if (playerName !== state.playerName) {
-    if (botDrew) {
-      showNotif(`🤖 ${playerName} karta oldi`);
-    } else if (card) {
-      const label = getCardLabel(card);
-      showNotif(`${playerName}: ${label}`);
-    }
-  }
-});
-
-socket.on('error', ({ message }) => showError(message));
-
-document.querySelectorAll('.btn-reaction').forEach(btn => {
-  btn.addEventListener('click', () => {
-    socket.emit('reaction', { emoji: btn.dataset.emoji });
-    btn.style.pointerEvents = 'none';
-    btn.style.transform = 'scale(0.8)';
-    setTimeout(() => {
-      btn.style.pointerEvents = 'auto';
-      btn.style.transform = '';
-    }, 500);
-  });
-});
-
-socket.on('reaction', ({ playerId, emoji }) => {
-  const el = document.createElement('div');
-  el.className = 'floating-reaction';
-  el.textContent = emoji;
-  
-  if (playerId === state.myId) {
-    const rect = document.querySelector('.player-area').getBoundingClientRect();
-    el.style.left = (rect.left + rect.width / 2 - 16) + 'px';
-    el.style.top = (rect.top - 20) + 'px';
-  } else {
-    // If opponent, just spawn near top
-    el.style.left = (Math.random() * 60 + 20) + '%';
-    el.style.top = '150px';
   }
   
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2000);
-});
+  if (els.addBotBtn) {
+    els.addBotBtn.addEventListener('click', () => {
+      const difficulty = els.botDifficulty?.value || 'medium';
+      socket.emit('addBot', { difficulty });
+    });
+  }
+  
+  if (els.drawBtn) {
+    els.drawBtn.addEventListener('click', () => {
+      if (!els.drawBtn.classList.contains('disabled')) socket.emit('drawCard');
+    });
+  }
+  
+  if (els.unoBtn) {
+    els.unoBtn.addEventListener('click', () => {
+      socket.emit('sayUno');
+      showNotif('🎴 UNO!');
+    });
+  }
+  
+  if (els.catchUnoBtn) {
+    els.catchUnoBtn.addEventListener('click', () => {
+      const targetId = els.catchUnoBtn.dataset.targetId;
+      if (targetId) socket.emit('catchUno', { targetId });
+    });
+  }
+  
+  if (els.chatToggleBtn) els.chatToggleBtn.addEventListener('click', toggleChat);
+  if (els.toggleChatBtn) els.toggleChatBtn.addEventListener('click', toggleChat);
+  if (els.sendChatBtn) els.sendChatBtn.addEventListener('click', sendChat);
+  if (els.chatInput) {
+    els.chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+  }
+  
+  if (els.sortColorBtn) {
+    els.sortColorBtn.addEventListener('click', () => {
+      state.sortMethod = state.sortMethod === 'color' ? 'none' : 'color';
+      if (state.gameState) updateGameUI(state.gameState);
+    });
+  }
+  
+  if (els.sortValueBtn) {
+    els.sortValueBtn.addEventListener('click', () => {
+      state.sortMethod = state.sortMethod === 'value' ? 'none' : 'value';
+      if (state.gameState) updateGameUI(state.gameState);
+    });
+  }
+  
+  document.querySelectorAll('.color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (state.pendingCard) {
+        socket.emit('playCard', { cardIndex: state.pendingCard.index, chosenColor: btn.dataset.color });
+        state.pendingCard = null;
+      }
+      hideColorPicker();
+    });
+  });
+  
+  document.querySelectorAll('.btn-reaction').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('reaction', { emoji: btn.dataset.emoji });
+    });
+  });
+  
+  if (els.playAgainBtn) {
+    els.playAgainBtn.addEventListener('click', () => {
+      socket.emit('startGame');
+      if (els.winModal) els.winModal.classList.add('hidden');
+    });
+  }
+  
+  if (els.goLobbyBtn) {
+    els.goLobbyBtn.addEventListener('click', () => location.reload());
+  }
+  
+  // Modal close handlers
+  const cancelCreateBtn = document.getElementById('cancel-create-btn');
+  if (cancelCreateBtn) {
+    cancelCreateBtn.addEventListener('click', () => {
+      const modal = document.getElementById('create-room-modal');
+      if (modal) modal.classList.add('hidden');
+    });
+  }
+  
+  const typeOpen = document.getElementById('type-open');
+  const typePrivate = document.getElementById('type-private');
+  const checkOpen = document.getElementById('check-open');
+  const checkPrivate = document.getElementById('check-private');
+  const countMinus = document.getElementById('count-minus');
+  const countPlus = document.getElementById('count-plus');
+  const maxPlayersDisplay = document.getElementById('max-players-display');
+  const confirmCreateBtn = document.getElementById('confirm-create-btn');
+  
+  if (typeOpen) {
+    typeOpen.addEventListener('click', () => {
+      typeOpen.classList.add('active');
+      if (typePrivate) typePrivate.classList.remove('active');
+      if (checkOpen) checkOpen.classList.remove('hidden');
+      if (checkPrivate) checkPrivate.classList.add('hidden');
+    });
+  }
+  
+  if (typePrivate) {
+    typePrivate.addEventListener('click', () => {
+      typePrivate.classList.add('active');
+      if (typeOpen) typeOpen.classList.remove('active');
+      if (checkPrivate) checkPrivate.classList.remove('hidden');
+      if (checkOpen) checkOpen.classList.add('hidden');
+    });
+  }
+  
+  if (countMinus && maxPlayersDisplay) {
+    countMinus.addEventListener('click', () => {
+      let val = parseInt(maxPlayersDisplay.textContent);
+      if (val > 2) {
+        val--;
+        maxPlayersDisplay.textContent = val;
+      }
+    });
+  }
+  
+  if (countPlus && maxPlayersDisplay) {
+    countPlus.addEventListener('click', () => {
+      let val = parseInt(maxPlayersDisplay.textContent);
+      if (val < 8) {
+        val++;
+        maxPlayersDisplay.textContent = val;
+      }
+    });
+  }
+  
+  if (confirmCreateBtn) {
+    confirmCreateBtn.addEventListener('click', confirmCreateRoom);
+  }
+}
 
 // ==================== INIT ====================
-showScreen('lobby');
-socket.emit('getRoomList');
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') hideColorPicker();
-  if ((e.key === 'u' || e.key === 'U') && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
-    socket.emit('sayUno');
+function init() {
+  // Check for existing session
+  const savedSession = localStorage.getItem('uno_session');
+  if (savedSession) {
+    authState.sessionToken = savedSession;
+    showLoading('Tizimga kirilmoqda...');
+    initSocket();
+  } else {
+    showScreen('auth');
   }
-  if (e.code === 'Space' && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
-    e.preventDefault();
-    if (els.drawBtn && !els.drawBtn.classList.contains('disabled')) {
-      els.drawBtn.click();
+  
+  initEventListeners();
+  
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') hideColorPicker();
+    if ((e.key === 'u' || e.key === 'U') && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
+      socket?.emit('sayUno');
     }
-  }
-  if (e.key === 'Enter' && state.screen === 'game') {
-    if (document.activeElement !== els.chatInput) {
+    if (e.code === 'Space' && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
       e.preventDefault();
-      if (els.chatPanel && !els.chatPanel.classList.contains('open')) {
-        els.chatToggleBtn?.click();
+      if (els.drawBtn && !els.drawBtn.classList.contains('disabled')) {
+        els.drawBtn.click();
       }
-      setTimeout(() => els.chatInput?.focus(), 100);
     }
-  }
-});
-
-if (els.sortColorBtn) {
-  els.sortColorBtn.addEventListener('click', () => {
-    state.sortMethod = state.sortMethod === 'color' ? 'none' : 'color';
-    updateGameUI(state.gameState);
-  });
-}
-if (els.sortValueBtn) {
-  els.sortValueBtn.addEventListener('click', () => {
-    state.sortMethod = state.sortMethod === 'value' ? 'none' : 'value';
-    updateGameUI(state.gameState);
+    if (e.key === 'Enter' && state.screen === 'game') {
+      if (document.activeElement !== els.chatInput) {
+        e.preventDefault();
+        if (els.chatPanel && !els.chatPanel.classList.contains('open')) {
+          els.chatToggleBtn?.click();
+        }
+        setTimeout(() => els.chatInput?.focus(), 100);
+      }
+    }
   });
 }
 
-console.log('🎮 UNO Online (Bot Support) yuklandi!');
+// Start the app
+init();

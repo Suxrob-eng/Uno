@@ -2,9 +2,10 @@
 <html lang="uz">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>UNO Online - Onlayn Multiplayer O'yin</title>
   <meta name="description" content="Do'stlar bilan onlayn UNO o'ynang! 8 o'yinchi, real-time multiplayer." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
@@ -12,8 +13,116 @@
 </head>
 <body>
 
+<!-- ========== LOADING OVERLAY ========== -->
+<div id="loading-overlay" class="loading-overlay hidden">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loading-text">Yuklanmoqda...</div>
+</div>
+
+<!-- ========== AUTH SCREEN ========== -->
+<div id="auth-screen" class="screen">
+  <div class="lobby-bg">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+  </div>
+  
+  <div class="auth-container">
+    <div class="logo-section">
+      <div class="uno-logo">
+        <span class="logo-u">U</span>
+        <span class="logo-n">N</span>
+        <span class="logo-o">O</span>
+      </div>
+      <p class="logo-subtitle">Onlayn Multiplayer • 8 O'yinchi</p>
+    </div>
+    
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button id="login-tab" class="auth-tab active">Kirish</button>
+        <button id="register-tab" class="auth-tab">Ro'yxatdan o'tish</button>
+      </div>
+      
+      <div id="login-form" class="auth-form">
+        <div class="input-group">
+          <label>Username</label>
+          <input type="text" id="login-username" placeholder="username" autocomplete="username" />
+        </div>
+        <div class="input-group">
+          <label>Parol</label>
+          <input type="password" id="login-password" placeholder="••••••" autocomplete="current-password" />
+        </div>
+        <button id="login-btn" class="btn btn-primary">Kirish</button>
+      </div>
+      
+      <div id="register-form" class="auth-form" style="display:none">
+        <div class="input-group">
+          <label>Username</label>
+          <input type="text" id="register-username" placeholder="username (3-20 belgi)" autocomplete="username" />
+        </div>
+        <div class="input-group">
+          <label>Parol</label>
+          <input type="password" id="register-password" placeholder="•••••• (min 4 belgi)" autocomplete="new-password" />
+        </div>
+        <div class="input-group">
+          <label>Ko'rsatiladigan ism</label>
+          <input type="text" id="register-displayname" placeholder="Ismingiz" />
+        </div>
+        <div class="input-group">
+          <label>Avatar URL (ixtiyoriy)</label>
+          <input type="text" id="register-avatar" placeholder="/avatars/default1.svg" />
+        </div>
+        <button id="register-btn" class="btn btn-primary">Ro'yxatdan o'tish</button>
+      </div>
+      
+      <div id="auth-error" class="auth-error hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== PROFILE SIDEBAR ========== -->
+<div id="profile-sidebar" class="profile-sidebar">
+  <div class="profile-header">
+    <h3>Profil</h3>
+    <button id="close-profile-btn" class="btn-icon-only">✕</button>
+  </div>
+  <div class="profile-avatar-container">
+    <img id="profile-avatar" class="profile-avatar" src="/avatars/default1.svg" alt="Avatar">
+  </div>
+  <div class="profile-info">
+    <div class="profile-field">
+      <label>Username</label>
+      <span id="profile-username">-</span>
+    </div>
+    <div class="profile-field">
+      <label>Ko'rsatiladigan ism</label>
+      <span id="profile-displayname">-</span>
+    </div>
+    <div class="profile-field">
+      <label>Statistika</label>
+      <span>🏆 Yutuqlar: <span id="profile-wins">0</span></span>
+      <span>🎮 O'yinlar: <span id="profile-games">0</span></span>
+    </div>
+  </div>
+  <div id="profile-edit-section" class="profile-edit-section" style="display:none">
+    <div class="input-group">
+      <label>Ko'rsatiladigan ism</label>
+      <input type="text" id="edit-displayname" placeholder="Ismingiz" />
+    </div>
+    <div class="input-group">
+      <label>Avatar URL</label>
+      <input type="text" id="edit-avatar" placeholder="/avatars/default1.svg" />
+    </div>
+    <button id="save-profile-btn" class="btn btn-primary">Saqlash</button>
+  </div>
+  <div class="profile-actions">
+    <button id="edit-profile-btn" class="btn btn-secondary">Tahrirlash</button>
+    <button id="logout-btn" class="btn btn-ghost">Chiqish</button>
+  </div>
+</div>
+
 <!-- ========== LOBBY SCREEN ========== -->
-<div id="lobby-screen" class="screen active">
+<div id="lobby-screen" class="screen" style="display:none">
   <div class="lobby-bg">
     <div class="orb orb1"></div>
     <div class="orb orb2"></div>
@@ -21,6 +130,14 @@
   </div>
   
   <div class="lobby-container">
+    <div class="top-bar">
+      <div class="user-info">
+        <img id="player-avatar" class="user-avatar" src="/avatars/default1.svg" alt="Avatar">
+        <span id="player-name-display" class="user-name">-</span>
+      </div>
+      <button id="profile-toggle" class="btn-icon-only profile-icon">👤</button>
+    </div>
+    
     <div class="logo-section">
       <div class="uno-logo">
         <span class="logo-u">U</span>
@@ -31,11 +148,6 @@
     </div>
     
     <div class="lobby-card">
-      <div class="input-group">
-        <label for="player-name">Ismingiz</label>
-        <input type="text" id="player-name" placeholder="Ismingizni kiriting..." maxlength="20" />
-      </div>
-      
       <div class="lobby-actions">
         <button id="create-room-btn" class="btn btn-primary">
           <span class="btn-icon">🏠</span>
@@ -60,11 +172,11 @@
       <div class="divider"><span>yoki</span></div>
 
       <div class="public-rooms-section">
-        <div class="public-rooms-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="public-rooms-header">
           <h3>Ochiq Xonalar</h3>
-          <button id="refresh-rooms-btn" class="btn-icon-only" title="Yangilash" style="background:transparent;border:none;cursor:pointer;font-size:1.2rem;">🔄</button>
+          <button id="refresh-rooms-btn" class="btn-icon-only" title="Yangilash">🔄</button>
         </div>
-        <div id="rooms-list" class="rooms-list" style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+        <div id="rooms-list" class="rooms-list">
           <div class="no-rooms">Hozircha xona yo'q</div>
         </div>
       </div>
@@ -117,7 +229,7 @@
 </div>
 
 <!-- ========== WAITING ROOM SCREEN ========== -->
-<div id="waiting-screen" class="screen">
+<div id="waiting-screen" class="screen" style="display:none">
   <div class="lobby-bg">
     <div class="orb orb1"></div>
     <div class="orb orb2"></div>
@@ -145,7 +257,6 @@
 
       <div id="waiting-players" class="waiting-players"></div>
       
-      <!-- Bot controls (only shown to host) -->
       <div id="bot-controls" class="bot-controls" style="display:none">
         <div class="bot-controls-header">
           <span>🤖 Bot qo'shish</span>
@@ -159,12 +270,6 @@
           <button id="add-bot-btn" class="btn-add-bot">+ Bot Qo'sh</button>
         </div>
       </div>
-      
-      <!-- Join request panel (for private rooms, host sees requests) -->
-      <div id="join-requests-panel" class="join-requests-panel" style="display:none">
-        <div class="join-req-header">🔔 Kirish so'rovlari</div>
-        <div id="join-requests-list" class="join-requests-list"></div>
-      </div>
 
       <div class="waiting-actions">
         <button id="start-game-btn" class="btn btn-primary" style="display:none">
@@ -177,19 +282,8 @@
   </div>
 </div>
 
-<!-- ========== JOIN REQUEST MODAL (for joining player) ========== -->
-<div id="pending-modal" class="modal hidden">
-  <div class="modal-backdrop"></div>
-  <div class="modal-content pending-content">
-    <div class="pending-spinner">⏳</div>
-    <h3>So'rov yuborildi</h3>
-    <p id="pending-msg">Host sizning kirishingizga ruxsat berishini kutmoqda...</p>
-    <button id="cancel-join-btn" class="btn btn-ghost" style="margin-top:16px">Bekor qilish</button>
-  </div>
-</div>
-
 <!-- ========== GAME SCREEN ========== -->
-<div id="game-screen" class="screen">
+<div id="game-screen" class="screen" style="display:none">
   <div id="other-players" class="other-players"></div>
   
   <div class="game-center">
@@ -198,7 +292,7 @@
         <div id="current-turn-name" class="turn-name">—</div>
         <div class="turn-label">navbatda</div>
         <div id="turn-timer-container" style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; margin-top: 5px; overflow: hidden; display: none;">
-          <div id="turn-timer-bar" style="width: 100%; height: 100%; background: #2ecc71; transition: width 0.1s linear, background-color 0.3s;"></div>
+          <div id="turn-timer-bar" style="width: 100%; height: 100%; background: #2ecc71; transition: width 0.1s linear;"></div>
         </div>
       </div>
       <div class="direction-indicator" id="direction-indicator">→</div>
@@ -218,7 +312,6 @@
     </div>
   </div>
   
-  <!-- Chat panel -->
   <div class="chat-panel" id="chat-panel">
     <div class="chat-header">
       <span>💬 Chat</span>
@@ -248,6 +341,7 @@
   <div class="player-area">
     <div class="player-info-bar">
       <div style="display:flex; align-items:center; gap:8px;">
+        <img id="my-avatar" class="my-avatar" src="/avatars/default1.svg" width="32" height="32" style="border-radius:50%">
         <span id="my-name-display" class="my-name">Sen</span>
         <span id="my-card-count" class="card-count-badge">0</span>
       </div>
@@ -259,21 +353,19 @@
     <div id="my-hand" class="my-hand"></div>
   </div>
   
-  <!-- Color picker modal -->
   <div id="color-picker" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content color-picker-content">
       <h3>🎨 Rang tanlang</h3>
       <div class="color-options">
-        <button class="color-btn" data-color="red" id="color-red">🔴 Qizil</button>
-        <button class="color-btn" data-color="green" id="color-green">🟢 Yashil</button>
-        <button class="color-btn" data-color="blue" id="color-blue">🔵 Ko'k</button>
-        <button class="color-btn" data-color="yellow" id="color-yellow">🟡 Sariq</button>
+        <button class="color-btn" data-color="red">🔴 Qizil</button>
+        <button class="color-btn" data-color="green">🟢 Yashil</button>
+        <button class="color-btn" data-color="blue">🔵 Ko'k</button>
+        <button class="color-btn" data-color="yellow">🟡 Sariq</button>
       </div>
     </div>
   </div>
   
-  <!-- Win modal -->
   <div id="win-modal" class="modal hidden">
     <div class="modal-backdrop"></div>
     <div class="modal-content win-content">
