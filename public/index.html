@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UNO Online - Onlayn Multiplayer O'yin</title>
+  <meta name="description" content="Do'stlar bilan onlayn UNO o'ynang! 8 o'yinchi, real-time multiplayer." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="reactions.css" />
+</head>
+<body>
+
+<!-- ========== LOBBY SCREEN ========== -->
+<div id="lobby-screen" class="screen active">
+  <div class="lobby-bg">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+  </div>
+  
+  <div class="lobby-container">
+    <div class="logo-section">
+      <div class="uno-logo">
+        <span class="logo-u">U</span>
+        <span class="logo-n">N</span>
+        <span class="logo-o">O</span>
+      </div>
+      <p class="logo-subtitle">Onlayn Multiplayer • 8 O'yinchi</p>
+    </div>
+    
+    <div class="lobby-card">
+      <div class="input-group">
+        <label for="player-name">Ismingiz</label>
+        <input type="text" id="player-name" placeholder="Ismingizni kiriting..." maxlength="20" />
+      </div>
+      
+      <div class="lobby-actions">
+        <button id="create-room-btn" class="btn btn-primary">
+          <span class="btn-icon">🏠</span>
+          Xona Yaratish
+        </button>
+      </div>
+      
+      <div class="divider"><span>yoki</span></div>
+      
+      <div class="join-section">
+        <h3>Xonaga Qo'shilish (Kod bilan)</h3>
+        <div class="input-group">
+          <label for="room-code">Xona Kodi</label>
+          <input type="text" id="room-code" placeholder="Masalan: ABC123" maxlength="8" style="text-transform:uppercase" />
+        </div>
+        <button id="join-room-btn" class="btn btn-secondary">
+          <span class="btn-icon">🚪</span>
+          Qo'shilish
+        </button>
+      </div>
+
+      <div class="divider"><span>yoki</span></div>
+
+      <div class="public-rooms-section">
+        <div class="public-rooms-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <h3>Ochiq Xonalar</h3>
+          <button id="refresh-rooms-btn" class="btn-icon-only" title="Yangilash" style="background:transparent;border:none;cursor:pointer;font-size:1.2rem;">🔄</button>
+        </div>
+        <div id="rooms-list" class="rooms-list" style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+          <div class="no-rooms">Hozircha xona yo'q</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== CREATE ROOM MODAL ========== -->
+<div id="create-room-modal" class="modal hidden">
+  <div class="modal-backdrop" id="create-modal-backdrop"></div>
+  <div class="modal-content create-room-content">
+    <h3>🏠 Yangi Xona Yaratish</h3>
+    <p class="modal-subtitle">Xona turini tanlang</p>
+    
+    <div class="room-type-options">
+      <button class="room-type-btn active" id="type-open" data-type="open">
+        <div class="room-type-icon">🌐</div>
+        <div class="room-type-info">
+          <div class="room-type-title">Ochiq Xona</div>
+          <div class="room-type-desc">Har kim kod bilan kira oladi</div>
+        </div>
+        <div class="room-type-check" id="check-open">✓</div>
+      </button>
+      
+      <button class="room-type-btn" id="type-private" data-type="private">
+        <div class="room-type-icon">🔒</div>
+        <div class="room-type-info">
+          <div class="room-type-title">Yopiq Xona</div>
+          <div class="room-type-desc">Faqat siz kirishga ruxsat berasiz</div>
+        </div>
+        <div class="room-type-check hidden" id="check-private">✓</div>
+      </button>
+    </div>
+
+    <div class="max-players-row">
+      <label class="max-players-label">👥 Maksimal o'yinchilar soni</label>
+      <div class="player-count-selector">
+        <button class="count-btn" id="count-minus">−</button>
+        <span id="max-players-display">8</span>
+        <button class="count-btn" id="count-plus">+</button>
+      </div>
+      <span class="count-range">(2 – 8 kishi)</span>
+    </div>
+
+    <div class="create-modal-actions">
+      <button id="confirm-create-btn" class="btn btn-primary">✅ Xona Ochish</button>
+      <button id="cancel-create-btn" class="btn btn-ghost">Bekor</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== WAITING ROOM SCREEN ========== -->
+<div id="waiting-screen" class="screen">
+  <div class="lobby-bg">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+  </div>
+  
+  <div class="waiting-container">
+    <div class="waiting-card">
+      <div class="waiting-header-row">
+        <h2>Xona</h2>
+        <div id="room-privacy-badge" class="privacy-badge open">🌐 Ochiq</div>
+      </div>
+      <div class="room-code-display">
+        <span id="room-code-display">------</span>
+        <button id="copy-code-btn" class="btn-icon-only" title="Nusxa olish">📋</button>
+      </div>
+      <p class="room-hint">Do'stlaringizga bu kodni yuboring!</p>
+      
+      <div class="waiting-capacity">
+        <span id="waiting-capacity-text">0/8 o'yinchi</span>
+        <div id="waiting-capacity-bar" class="capacity-bar">
+          <div id="capacity-fill" class="capacity-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div id="waiting-players" class="waiting-players"></div>
+      
+      <!-- Bot controls (only shown to host) -->
+      <div id="bot-controls" class="bot-controls" style="display:none">
+        <div class="bot-controls-header">
+          <span>🤖 Bot qo'shish</span>
+        </div>
+        <div class="bot-controls-row">
+          <select id="bot-difficulty" class="bot-select">
+            <option value="easy">😴 Oson</option>
+            <option value="medium" selected>🧠 O'rta</option>
+            <option value="hard">💀 Qiyin</option>
+          </select>
+          <button id="add-bot-btn" class="btn-add-bot">+ Bot Qo'sh</button>
+        </div>
+      </div>
+      
+      <!-- Join request panel (for private rooms, host sees requests) -->
+      <div id="join-requests-panel" class="join-requests-panel" style="display:none">
+        <div class="join-req-header">🔔 Kirish so'rovlari</div>
+        <div id="join-requests-list" class="join-requests-list"></div>
+      </div>
+
+      <div class="waiting-actions">
+        <button id="start-game-btn" class="btn btn-primary" style="display:none">
+          🎮 O'yinni Boshlash
+        </button>
+        <div id="waiting-message" class="waiting-message">Boshqa o'yinchilarni kutmoqda...</div>
+        <button id="leave-room-btn" class="btn btn-ghost">🚪 Chiqish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== JOIN REQUEST MODAL (for joining player) ========== -->
+<div id="pending-modal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content pending-content">
+    <div class="pending-spinner">⏳</div>
+    <h3>So'rov yuborildi</h3>
+    <p id="pending-msg">Host sizning kirishingizga ruxsat berishini kutmoqda...</p>
+    <button id="cancel-join-btn" class="btn btn-ghost" style="margin-top:16px">Bekor qilish</button>
+  </div>
+</div>
+
+<!-- ========== GAME SCREEN ========== -->
+<div id="game-screen" class="screen">
+  <div id="other-players" class="other-players"></div>
+  
+  <div class="game-center">
+    <div class="game-info-bar">
+      <div class="turn-indicator">
+        <div id="current-turn-name" class="turn-name">—</div>
+        <div class="turn-label">navbatda</div>
+        <div id="turn-timer-container" style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; margin-top: 5px; overflow: hidden; display: none;">
+          <div id="turn-timer-bar" style="width: 100%; height: 100%; background: #2ecc71; transition: width 0.1s linear, background-color 0.3s;"></div>
+        </div>
+      </div>
+      <div class="direction-indicator" id="direction-indicator">→</div>
+      <div class="deck-area" id="deck-area">
+        <div class="deck-card" id="draw-btn">
+          <div class="deck-back">
+            <span class="deck-count" id="deck-count">108</span>
+            <span class="deck-label">KARTA</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="discard-pile-area">
+      <div id="top-card" class="card top-card"></div>
+      <div id="current-color-badge" class="color-badge"></div>
+    </div>
+  </div>
+  
+  <!-- Chat panel -->
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">
+      <span>💬 Chat</span>
+      <button id="toggle-chat-btn" class="btn-icon-only">✕</button>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <div class="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Xabar..." maxlength="100" />
+      <button id="send-chat-btn" class="btn-send">↑</button>
+    </div>
+  </div>
+  
+  <button id="chat-toggle-btn" class="chat-toggle-btn">💬</button>
+  
+  <div class="game-actions">
+    <button id="uno-btn" class="btn btn-uno" style="display:none">UNO!</button>
+    <button id="catch-uno-btn" class="btn btn-catch" style="display:none">😱 UNO Ushlash</button>
+  </div>
+  
+  <div class="reaction-actions">
+    <button class="btn-reaction" data-emoji="😂">😂</button>
+    <button class="btn-reaction" data-emoji="😡">😡</button>
+    <button class="btn-reaction" data-emoji="🎉">🎉</button>
+    <button class="btn-reaction" data-emoji="😭">😭</button>
+  </div>
+  
+  <div class="player-area">
+    <div class="player-info-bar">
+      <span id="my-name-display" class="my-name">Sen</span>
+      <span id="my-card-count" class="card-count-badge">0</span>
+    </div>
+    <div id="my-hand" class="my-hand"></div>
+  </div>
+  
+  <!-- Color picker modal -->
+  <div id="color-picker" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content color-picker-content">
+      <h3>🎨 Rang tanlang</h3>
+      <div class="color-options">
+        <button class="color-btn" data-color="red" id="color-red">🔴 Qizil</button>
+        <button class="color-btn" data-color="green" id="color-green">🟢 Yashil</button>
+        <button class="color-btn" data-color="blue" id="color-blue">🔵 Ko'k</button>
+        <button class="color-btn" data-color="yellow" id="color-yellow">🟡 Sariq</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Win modal -->
+  <div id="win-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content win-content">
+      <div class="win-animation">🏆</div>
+      <h2 id="win-title">G'olib!</h2>
+      <p id="win-message"></p>
+      <div class="win-actions">
+        <button id="play-again-btn" class="btn btn-primary" style="display:none">🔄 Qayta O'ynash</button>
+        <button id="go-lobby-btn" class="btn btn-ghost">🏠 Lobbyga Qaytish</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="error-toast" class="toast hidden"></div>
+  <div id="notif-toast" class="toast notif hidden"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
