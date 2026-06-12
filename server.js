@@ -4,8 +4,6 @@ const { Server } = require('socket.io');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
-const { Pool } = require('pg');
-require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
@@ -30,33 +28,129 @@ app.use(express.json());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 100,
   message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api/', limiter);
 
-// ==================== DATABASE CONNECTION ====================
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || 'uno_game',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+// ==================== IN-MEMORY STORAGE ====================
+const users = new Map();
+const sessions = new Map();
+const userStats = new Map();
+let nextUserId = 1;
 
-// Test database connection
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('❌ Database connection error:', err.stack);
-  } else {
-    console.log('✅ Connected to PostgreSQL database');
-    release();
+const ACHIEVEMENTS = [
+  { id: 1, name: 'Birinchi g\'alaba', description: 'Birinchi marta g\'alaba qozonish', icon: '🏆', required_wins: 1 },
+  { id: 2, name: 'UNO Ustasi', description: '5 marta g\'alaba qozonish', icon: '🎯', required_wins: 5 },
+  { id: 3, name: 'UNO Legend', description: '10 marta g\'alaba qozonish', icon: '👑', required_wins: 10 },
+  { id: 4, name: 'Tajribali o\'yinchi', description: '20 ta o\'yin o\'ynash', icon: '🎮', required_games: 20 },
+  { id: 5, name: 'UNO Mutaxassisi', description: '10 marta UNO deyish', icon: '🔊', required_uno: 10 },
+];
+
+const DEFAULT_AVATARS = [
+  '/avatars/default1.svg', '/avatars/default2.svg', 
+  '/avatars/default3.svg', '/avatars/default4.svg'
+];
+
+function getUserByUsername(username) {
+  for (const [id, user] of users) {
+    if (user.username === username) return { ...user, id: parseInt(id) };
   }
-});
+  return null;
+}
+
+function getUserById(id) {
+  const user = users.get(id.toString());
+  if (!user) return null;
+  const stats = userStats.get(id.toString()) || { wins: 0, losses: 0, games_played: 0, total_points: 0, uno_count: 0, catch_uno_count: 0 };
+  return { ...user, ...stats, id: parseInt(id) };
+}
+
+function createUser(username, passwordHash, displayName, avatarUrl) {
+  const userId = (nextUserId++).toString();
+  users.set(userId, {
+    username,
+    password_hash: passwordHash,
+    display_name: displayName,
+    avatar_url: avatarUrl,
+    created_at: new Date().toISOString(),
+    last_login: new Date().toISOString()
+  });
+  userStats.set(userId, { wins: 0, losses: 0, games_played: 0, total_points: 0, uno_count: 0, catch_uno_count: 0 });
+  return parseInt(userId);
+}
+
+function updateUserStats(userId, won, points, unoCalled, catchUno) {
+  const stats = userStats.get(userId.toString()) || { wins: 0, losses: 0, games_played: 0, total_points: 0, uno_count: 0, catch_uno_count: 0 };
+  
+  if (won) stats.wins++;
+  else stats.losses++;
+  
+  stats.games_played++;
+  stats.total_points += points;
+  if (unoCalled) stats.uno_count++;
+  if (catchUno) stats.catch_uno_count++;
+  
+  userStats.set(userId.toString(), stats);
+  
+  // Check achievements
+  const userAchievements = globalUserAchievements.get(userId.toString()) || [];
+  for (const ach of ACHIEVEMENTS) {
+    if (!userAchievements.find(a => a.id === ach.id)) {
+      let earned = false;
+      if (ach.required_wins > 0 && stats.wins >= ach.required_wins) earned = true;
+      if (ach.required_games > 0 && stats.games_played >= ach.required_games) earned = true;
+      if (ach.required_uno > 0 && stats.uno_count >= ach.required_uno) earned = true;
+      
+      if (earned) {
+        userAchievements.push({ ...ach, earned_at: new Date().toISOString() });
+      }
+    }
+  }
+  globalUserAchievements.set(userId.toString(), userAchievements);
+}
+
+function createSession(userId, token, ip, userAgent) {
+  sessions.set(token, { userId: userId.toString(), expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), ip, userAgent });
+  return token;
+}
+
+function getSessionUser(sessionToken) {
+  const session = sessions.get(sessionToken);
+  if (!session) return null;
+  if (new Date(session.expires_at) < new Date()) {
+    sessions.delete(sessionToken);
+    return null;
+  }
+  return getUserById(session.userId);
+}
+
+function deleteSession(sessionToken) {
+  sessions.delete(sessionToken);
+}
+
+function getLeaderboard(limit = 10) {
+  const stats = [];
+  for (const [id, user] of users) {
+    const userStat = userStats.get(id) || { wins: 0, games_played: 0, total_points: 0 };
+    stats.push({
+      username: user.username,
+      display_name: user.display_name,
+      avatar_url: user.avatar_url,
+      wins: userStat.wins,
+      games_played: userStat.games_played,
+      total_points: userStat.total_points
+    });
+  }
+  return stats.sort((a, b) => b.wins - a.wins || b.total_points - a.total_points).slice(0, limit);
+}
+
+function getUserAchievements(userId) {
+  return globalUserAchievements.get(userId.toString()) || [];
+}
+
+const globalUserAchievements = new Map();
 
 // ==================== UNO GAME LOGIC ====================
 const COLORS = ['red', 'green', 'blue', 'yellow'];
@@ -427,173 +521,6 @@ function startGame(room) {
   scheduleNextBotTurn(room);
 }
 
-// ==================== DATABASE FUNCTIONS ====================
-async function getUserByUsername(username) {
-  const result = await pool.query(
-    'SELECT id, username, password_hash, display_name, avatar_url FROM users WHERE username = $1',
-    [username]
-  );
-  return result.rows[0];
-}
-
-async function getUserById(id) {
-  const result = await pool.query(
-    `SELECT u.id, u.username, u.display_name, u.avatar_url, 
-            s.wins, s.losses, s.games_played, s.total_points, s.uno_count
-     FROM users u
-     LEFT JOIN user_stats s ON u.id = s.user_id
-     WHERE u.id = $1`,
-    [id]
-  );
-  return result.rows[0];
-}
-
-async function createUser(username, passwordHash, displayName, avatarUrl) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    const result = await client.query(
-      'INSERT INTO users (username, password_hash, display_name, avatar_url) VALUES ($1, $2, $3, $4) RETURNING id',
-      [username, passwordHash, displayName, avatarUrl]
-    );
-    const userId = result.rows[0].id;
-    
-    await client.query(
-      'INSERT INTO user_stats (user_id) VALUES ($1)',
-      [userId]
-    );
-    
-    await client.query('COMMIT');
-    return userId;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-async function updateUserStats(userId, won, points, unoCalled, catchUno) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    await client.query(
-      `UPDATE user_stats 
-       SET wins = wins + $1, 
-           games_played = games_played + 1,
-           total_points = total_points + $2,
-           uno_count = uno_count + $3,
-           catch_uno_count = catch_uno_count + $4,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $5`,
-      [won ? 1 : 0, points, unoCalled ? 1 : 0, catchUno ? 1 : 0, userId]
-    );
-    
-    if (won) {
-      await checkAchievements(client, userId);
-    }
-    
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-async function checkAchievements(client, userId) {
-  const stats = await client.query(
-    'SELECT wins, games_played, uno_count FROM user_stats WHERE user_id = $1',
-    [userId]
-  );
-  
-  const achievements = await client.query(
-    'SELECT id, required_wins, required_games, required_uno FROM achievements'
-  );
-  
-  for (const ach of achievements.rows) {
-    if ((ach.required_wins > 0 && stats.rows[0].wins >= ach.required_wins) ||
-        (ach.required_games > 0 && stats.rows[0].games_played >= ach.required_games) ||
-        (ach.required_uno > 0 && stats.rows[0].uno_count >= ach.required_uno)) {
-      
-      await client.query(
-        `INSERT INTO user_achievements (user_id, achievement_id) 
-         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [userId, ach.id]
-      );
-    }
-  }
-}
-
-async function createSession(userId, token, ip, userAgent) {
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
-  
-  await pool.query(
-    'INSERT INTO sessions (session_token, user_id, expires_at, ip_address, user_agent) VALUES ($1, $2, $3, $4, $5)',
-    [token, userId, expiresAt, ip, userAgent]
-  );
-}
-
-async function getSessionUser(sessionToken) {
-  const result = await pool.query(
-    `SELECT u.id, u.username, u.display_name, u.avatar_url, s.expires_at
-     FROM sessions s
-     JOIN users u ON s.user_id = u.id
-     WHERE s.session_token = $1 AND s.expires_at > NOW()`,
-    [sessionToken]
-  );
-  
-  if (result.rows.length === 0) return null;
-  return result.rows[0];
-}
-
-async function deleteSession(sessionToken) {
-  await pool.query('DELETE FROM sessions WHERE session_token = $1', [sessionToken]);
-}
-
-async function getLeaderboard(limit = 10) {
-  const result = await pool.query(
-    `SELECT u.username, u.display_name, u.avatar_url, s.wins, s.games_played, s.total_points
-     FROM users u
-     JOIN user_stats s ON u.id = s.user_id
-     ORDER BY s.wins DESC, s.total_points DESC
-     LIMIT $1`,
-    [limit]
-  );
-  return result.rows;
-}
-
-async function saveGameHistory(roomId, winnerId, players, duration, turns) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    const result = await client.query(
-      'INSERT INTO game_history (room_id, winner_id, end_time, total_turns, game_duration) VALUES ($1, $2, NOW(), $3, $4) RETURNING id',
-      [roomId, winnerId, turns, duration]
-    );
-    const gameId = result.rows[0].id;
-    
-    for (const player of players) {
-      await client.query(
-        'INSERT INTO game_players (game_id, user_id, is_bot, bot_name, final_score, position, cards_played, uno_called) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-        [gameId, player.userId, player.isBot, player.botName, player.score, player.position, player.cardsPlayed, player.unoCalled]
-      );
-    }
-    
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 // ==================== AUTH ROUTES ====================
 app.post('/api/register', async (req, res) => {
   const { username, password, displayName, avatar } = req.body;
@@ -612,7 +539,7 @@ app.post('/api/register', async (req, res) => {
   }
   
   try {
-    const existingUser = await getUserByUsername(username);
+    const existingUser = getUserByUsername(username);
     if (existingUser) {
       return res.status(400).json({ error: 'Bu username band!' });
     }
@@ -620,11 +547,11 @@ app.post('/api/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const avatarUrl = avatar || DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)];
     
-    const userId = await createUser(username, passwordHash, displayName, avatarUrl);
+    const userId = createUser(username, passwordHash, displayName, avatarUrl);
     const sessionToken = crypto.randomBytes(32).toString('hex');
-    await createSession(userId, sessionToken, req.ip, req.headers['user-agent']);
+    createSession(userId, sessionToken, req.ip, req.headers['user-agent']);
     
-    const user = await getUserById(userId);
+    const user = getUserById(userId);
     
     res.json({ 
       success: true, 
@@ -655,7 +582,7 @@ app.post('/api/login', async (req, res) => {
   }
   
   try {
-    const user = await getUserByUsername(username);
+    const user = getUserByUsername(username);
     if (!user) {
       return res.status(401).json({ error: 'Noto\'g\'ri username yoki parol!' });
     }
@@ -666,11 +593,9 @@ app.post('/api/login', async (req, res) => {
     }
     
     const sessionToken = crypto.randomBytes(32).toString('hex');
-    await createSession(user.id, sessionToken, req.ip, req.headers['user-agent']);
+    createSession(user.id, sessionToken, req.ip, req.headers['user-agent']);
     
-    await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
-    
-    const userWithStats = await getUserById(user.id);
+    const userWithStats = getUserById(user.id);
     
     res.json({ 
       success: true, 
@@ -696,18 +621,18 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/logout', async (req, res) => {
   const { sessionToken } = req.body;
   if (sessionToken) {
-    await deleteSession(sessionToken);
+    deleteSession(sessionToken);
   }
   res.json({ success: true });
 });
 
 app.get('/api/user/:username', async (req, res) => {
   try {
-    const user = await getUserByUsername(req.params.username);
+    const user = getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: 'User topilmadi' });
     }
-    const userWithStats = await getUserById(user.id);
+    const userWithStats = getUserById(user.id);
     res.json({
       username: userWithStats.username,
       displayName: userWithStats.display_name,
@@ -730,17 +655,19 @@ app.post('/api/update-profile', async (req, res) => {
   const { sessionToken, displayName, avatar } = req.body;
   
   try {
-    const sessionUser = await getSessionUser(sessionToken);
+    const sessionUser = getSessionUser(sessionToken);
     if (!sessionUser) {
       return res.status(401).json({ error: 'Avtorizatsiyadan o\'tmagan' });
     }
     
-    await pool.query(
-      'UPDATE users SET display_name = $1, avatar_url = $2 WHERE id = $3',
-      [displayName, avatar, sessionUser.id]
-    );
+    const user = users.get(sessionUser.id.toString());
+    if (user) {
+      user.display_name = displayName;
+      user.avatar_url = avatar;
+      users.set(sessionUser.id.toString(), user);
+    }
     
-    const updatedUser = await getUserById(sessionUser.id);
+    const updatedUser = getUserById(sessionUser.id);
     
     res.json({ 
       success: true, 
@@ -763,7 +690,7 @@ app.post('/api/update-profile', async (req, res) => {
 
 app.get('/api/leaderboard', async (req, res) => {
   try {
-    const leaderboard = await getLeaderboard(10);
+    const leaderboard = getLeaderboard(10);
     res.json(leaderboard);
   } catch (error) {
     console.error('Leaderboard error:', error);
@@ -772,27 +699,18 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 app.get('/api/online-users', (req, res) => {
-  // This will be handled by socket.io
   res.json({ count: onlineUsers.size });
 });
 
 app.get('/api/achievements/:username', async (req, res) => {
   try {
-    const user = await getUserByUsername(req.params.username);
+    const user = getUserByUsername(req.params.username);
     if (!user) {
       return res.status(404).json({ error: 'User topilmadi' });
     }
     
-    const result = await pool.query(
-      `SELECT a.name, a.description, a.icon, ua.earned_at
-       FROM user_achievements ua
-       JOIN achievements a ON ua.achievement_id = a.id
-       WHERE ua.user_id = $1
-       ORDER BY ua.earned_at DESC`,
-      [user.id]
-    );
-    
-    res.json(result.rows);
+    const achievements = getUserAchievements(user.id);
+    res.json(achievements);
   } catch (error) {
     console.error('Achievements error:', error);
     res.status(500).json({ error: 'Server xatoligi!' });
@@ -810,7 +728,7 @@ io.on('connection', (socket) => {
 
   socket.on('auth', async ({ sessionToken }) => {
     try {
-      const sessionUser = await getSessionUser(sessionToken);
+      const sessionUser = getSessionUser(sessionToken);
       if (sessionUser) {
         socket.userId = sessionUser.id;
         socket.userData = { 
@@ -821,12 +739,6 @@ io.on('connection', (socket) => {
         onlineUsers.set(socket.id, { userId: sessionUser.id, username: sessionUser.username });
         socket.emit('authSuccess', socket.userData);
         io.emit('onlineCount', onlineUsers.size);
-        
-        // Update user's socket id in database
-        await pool.query(
-          'UPDATE users SET last_login = NOW() WHERE id = $1',
-          [sessionUser.id]
-        );
       } else {
         socket.emit('authFailed');
       }
@@ -836,7 +748,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Rest of socket events (same as before, but with userId tracking)
   socket.on('createRoom', ({ privacy, maxPlayers, password }) => {
     if (!socket.userData) return socket.emit('error', { message: 'Avval tizimga kiring!' });
     
@@ -974,29 +885,15 @@ io.on('connection', (socket) => {
       io.to(socket.roomId).emit('chatMessage', { type: 'system', message: `🏆 ${player.name} g'olib bo'ldi! (${result.points} ball)` });
       io.emit('roomListUpdate', getRoomList());
       
-      // Update stats in database
       if (player.userId) {
-        updateUserStats(player.userId, true, result.points, player.saidUno, false).catch(console.error);
+        updateUserStats(player.userId, true, result.points, player.saidUno, false);
       }
       
-      // Update other players' stats (losses)
       room.players.forEach(p => {
         if (p.userId && p.id !== socket.id && !p.isBot) {
-          updateUserStats(p.userId, false, 0, false, false).catch(console.error);
+          updateUserStats(p.userId, false, 0, false, false);
         }
       });
-      
-      // Save game history
-      const playersData = room.players.map((p, idx) => ({
-        userId: p.userId,
-        isBot: p.isBot,
-        botName: p.isBot ? p.name : null,
-        score: calculatePoints(p.hand),
-        position: idx,
-        cardsPlayed: 7 - p.hand.length,
-        unoCalled: p.saidUno
-      }));
-      saveGameHistory(room.id, player.userId, playersData, Date.now() - room.createdAt, 0).catch(console.error);
       
       return;
     }
@@ -1040,9 +937,8 @@ io.on('connection', (socket) => {
       });
       broadcastState(room);
       
-      // Update catch UNO count
       if (socket.userId) {
-        updateUserStats(socket.userId, false, 0, false, true).catch(console.error);
+        updateUserStats(socket.userId, false, 0, false, true);
       }
     }
   });
@@ -1054,14 +950,6 @@ io.on('connection', (socket) => {
     if (player) {
       const cleanMsg = message.substring(0, 200).replace(/[<>]/g, '');
       io.to(socket.roomId).emit('chatMessage', { type: 'player', playerName: player.name, message: cleanMsg });
-      
-      // Save chat to database
-      if (socket.userId) {
-        pool.query(
-          'INSERT INTO chat_history (room_id, user_id, message) VALUES ($1, $2, $3)',
-          [room.id, socket.userId, cleanMsg]
-        ).catch(console.error);
-      }
     }
   });
   
@@ -1116,10 +1004,5 @@ io.on('connection', (socket) => {
   });
 });
 
-const DEFAULT_AVATARS = [
-  '/avatars/default1.svg', '/avatars/default2.svg', 
-  '/avatars/default3.svg', '/avatars/default4.svg'
-];
-
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🎮 UNO server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`🎮 UNO Server running on http://localhost:${PORT}`));
