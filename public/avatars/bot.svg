@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="48" fill="#6c5ce7"/>
+  <rect x="30" y="35" width="10" height="10" rx="3" fill="white"/>
+  <rect x="60" y="35" width="10" height="10" rx="3" fill="white"/>
+  <rect x="40" y="55" width="20" height="8" rx="4" fill="white"/>
+  <circle cx="35" cy="40" r="2" fill="#2d3436"/>
+  <circle cx="65" cy="40" r="2" fill="#2d3436"/>
+  <text x="50" y="78" text-anchor="middle" fill="white" font-size="16" font-weight="bold" font-family="Arial">🤖</text>
+</svg>

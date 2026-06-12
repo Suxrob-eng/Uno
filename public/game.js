@@ -1,10 +1,10 @@
 // ==========================================
-//   UNO ONLINE - CLIENT GAME LOGIC (FULLY FIXED)
+//   UNO ONLINE - CLIENT GAME LOGIC (FULL VERSION)
 // ==========================================
 
 let socket = null;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
+const MAX_RECONNECT_ATTEMPTS = 10;
 let socketEventsSetup = false;
 
 // ==================== AUTH STATE ====================
@@ -58,7 +58,6 @@ function hideLoading() {
 }
 
 const els = {
-  // Auth elements
   loginTab: document.getElementById('login-tab'),
   registerTab: document.getElementById('register-tab'),
   loginForm: document.getElementById('login-form'),
@@ -73,7 +72,6 @@ const els = {
   registerBtn: document.getElementById('register-btn'),
   authError: document.getElementById('auth-error'),
   
-  // Profile elements
   profileSidebar: document.getElementById('profile-sidebar'),
   profileToggle: document.getElementById('profile-toggle'),
   closeProfileBtn: document.getElementById('close-profile-btn'),
@@ -89,7 +87,6 @@ const els = {
   profileEditSection: document.getElementById('profile-edit-section'),
   logoutBtn: document.getElementById('logout-btn'),
   
-  // Lobby elements
   playerNameDisplay: document.getElementById('player-name-display'),
   playerAvatar: document.getElementById('player-avatar'),
   createRoomBtn: document.getElementById('create-room-btn'),
@@ -137,7 +134,6 @@ const els = {
   notifToast: document.getElementById('notif-toast')
 };
 
-// ==================== SCREEN MANAGEMENT ====================
 function showScreen(name) {
   Object.keys(screens).forEach(key => {
     const s = screens[key];
@@ -153,7 +149,6 @@ function showScreen(name) {
   state.screen = name;
 }
 
-// ==================== TOAST ====================
 let errorTimeout, notifTimeout;
 
 function showError(msg) {
@@ -172,7 +167,6 @@ function showNotif(msg) {
   notifTimeout = setTimeout(() => els.notifToast.classList.add('hidden'), 3000);
 }
 
-// ==================== CARD FUNCTIONS ====================
 function getCardLabel(card) {
   if (!card) return '?';
   const labels = { 'skip': '⊘', 'reverse': '↺', 'draw2': '+2', 'wild': '★', 'wild4': '+4' };
@@ -216,7 +210,6 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ==================== GAME UI UPDATE ====================
 function updateGameUI(gs) {
   if (!gs) return;
   state.gameState = gs;
@@ -291,7 +284,7 @@ function updateGameUI(gs) {
   }
 
   if (els.unoBtn) {
-    els.unoBtn.style.display = (me && me.cardCount <= 2 && me.cardCount > 0 && gs.gameState === 'playing') ? 'block' : 'none';
+    els.unoBtn.style.display = (me && me.cardCount === 1 && gs.gameState === 'playing') ? 'block' : 'none';
   }
 
   const catchTarget = gs.players?.find(p => !p.isMe && p.cardCount === 1 && !p.saidUno);
@@ -391,7 +384,6 @@ function renderOtherPlayers(gs) {
   });
 }
 
-// ==================== PLAY CARD ====================
 function onPlayCard(card, index) {
   if (!socket) return;
   if (card.type === 'wild' || card.type === 'wild4') {
@@ -410,7 +402,6 @@ function hideColorPicker() {
   if (els.colorPicker) els.colorPicker.classList.add('hidden'); 
 }
 
-// ==================== WIN MODAL ====================
 function showWinModal(winner) {
   if (!els.winModal) return;
   const isWinner = winner?.id === state.myId;
@@ -435,7 +426,6 @@ function showWinModal(winner) {
   els.winModal.classList.remove('hidden');
 }
 
-// ==================== WAITING ROOM ====================
 function updateWaitingRoom(gs) {
   if (!els.waitingPlayers) return;
   els.waitingPlayers.innerHTML = '';
@@ -511,7 +501,6 @@ function updateWaitingRoom(gs) {
   }
 }
 
-// ==================== CHAT ====================
 function addChatMessage(data) {
   if (!els.chatMessages) return;
   const div = document.createElement('div');
@@ -578,7 +567,6 @@ function sendChat() {
   if (els.chatInput) els.chatInput.value = '';
 }
 
-// ==================== AUTH FUNCTIONS ====================
 function initSocket() {
   if (socket) {
     if (socketEventsSetup) {
@@ -586,13 +574,16 @@ function initSocket() {
       socketEventsSetup = false;
     }
     socket.disconnect();
+    socket = null;
   }
   
   socket = io({
-    transports: ['websocket', 'polling'],
+    transports: ['websocket'],
     reconnection: true,
     reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-    reconnectionDelay: 1000
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000
   });
   
   socket.on('connect', () => {
@@ -602,6 +593,12 @@ function initSocket() {
       socket.emit('auth', { sessionToken: authState.sessionToken });
     }
     socket.emit('getRoomList');
+    hideLoading();
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected');
+    showError('Server bilan aloqa uzildi. Qayta ulanish...');
   });
   
   socket.on('connect_error', (error) => {
@@ -700,6 +697,11 @@ function setupSocketEvents() {
   
   socket.on('reaction', ({ playerId, emoji }) => {
     showFloatingReaction(playerId, emoji);
+  });
+  
+  socket.on('onlineCount', (count) => {
+    const onlineEl = document.getElementById('online-count');
+    if (onlineEl) onlineEl.textContent = count;
   });
 }
 
@@ -904,7 +906,6 @@ async function saveProfile() {
   }
 }
 
-// ==================== JOIN / CREATE ROOM ====================
 let isJoining = false;
 
 function joinRoom(roomId) {
@@ -978,14 +979,12 @@ function showFloatingReaction(playerId, emoji) {
   setTimeout(() => el.remove(), 2000);
 }
 
-// ==================== EVENT LISTENERS ====================
 let eventListenersInitialized = false;
 
 function initEventListeners() {
   if (eventListenersInitialized) return;
   eventListenersInitialized = true;
   
-  // Auth tabs
   if (els.loginTab) {
     els.loginTab.addEventListener('click', () => {
       els.loginTab.classList.add('active');
@@ -1021,8 +1020,8 @@ function initEventListeners() {
   }
   
   if (els.saveProfileBtn) els.saveProfileBtn.addEventListener('click', saveProfile);
-  
   if (els.createRoomBtn) els.createRoomBtn.addEventListener('click', createRoom);
+  
   if (els.joinRoomBtn) {
     els.joinRoomBtn.addEventListener('click', () => {
       const code = els.roomCode?.value.trim().toUpperCase();
@@ -1030,17 +1029,21 @@ function initEventListeners() {
       else showError('Xona kodini kiriting!');
     });
   }
+  
   if (els.refreshRoomsBtn) {
     els.refreshRoomsBtn.addEventListener('click', () => {
       if (socket) socket.emit('getRoomList');
     });
   }
+  
   if (els.startGameBtn) {
     els.startGameBtn.addEventListener('click', () => {
       if (socket) socket.emit('startGame');
     });
   }
+  
   if (els.leaveRoomBtn) els.leaveRoomBtn.addEventListener('click', () => location.reload());
+  
   if (els.copyCodeBtn) {
     els.copyCodeBtn.addEventListener('click', () => {
       const code = els.roomCodeDisplay?.textContent;
@@ -1086,6 +1089,7 @@ function initEventListeners() {
   if (els.chatToggleBtn) els.chatToggleBtn.addEventListener('click', toggleChat);
   if (els.toggleChatBtn) els.toggleChatBtn.addEventListener('click', toggleChat);
   if (els.sendChatBtn) els.sendChatBtn.addEventListener('click', sendChat);
+  
   if (els.chatInput) {
     els.chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
   }
@@ -1104,7 +1108,6 @@ function initEventListeners() {
     });
   }
   
-  // Color picker buttons
   document.querySelectorAll('.color-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (state.pendingCard && socket) {
@@ -1115,7 +1118,6 @@ function initEventListeners() {
     });
   });
   
-  // Reaction buttons
   document.querySelectorAll('.btn-reaction').forEach(btn => {
     btn.addEventListener('click', () => {
       if (socket) socket.emit('reaction', { emoji: btn.dataset.emoji });
@@ -1133,7 +1135,6 @@ function initEventListeners() {
     els.goLobbyBtn.addEventListener('click', () => location.reload());
   }
   
-  // Modal close handlers
   const cancelCreateBtn = document.getElementById('cancel-create-btn');
   if (cancelCreateBtn) {
     cancelCreateBtn.addEventListener('click', () => {
@@ -1193,39 +1194,34 @@ function initEventListeners() {
     confirmCreateBtn.addEventListener('click', confirmCreateRoom);
   }
   
-  // Color picker backdrop
   const colorPickerBackdrop = document.querySelector('#color-picker .modal-backdrop');
   if (colorPickerBackdrop) {
     colorPickerBackdrop.addEventListener('click', hideColorPicker);
   }
 }
 
-// ==================== INIT ====================
-function init() {
-  initEventListeners();
-  
-  // Check for existing session
-  const savedSession = localStorage.getItem('uno_session');
-  if (savedSession) {
-    authState.sessionToken = savedSession;
-    showLoading('Tizimga kirilmoqda...');
-    initSocket();
-  } else {
-    showScreen('auth');
-  }
-  
-  // Keyboard shortcuts
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') hideColorPicker();
+function initKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      hideColorPicker();
+      const modal = document.getElementById('create-room-modal');
+      if (modal) modal.classList.add('hidden');
+      if (els.profileSidebar?.classList.contains('open')) {
+        els.profileSidebar.classList.remove('open');
+      }
+    }
+    
     if ((e.key === 'u' || e.key === 'U') && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
       if (socket) socket.emit('sayUno');
     }
+    
     if (e.code === 'Space' && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
       e.preventDefault();
       if (els.drawBtn && !els.drawBtn.classList.contains('disabled')) {
         els.drawBtn.click();
       }
     }
+    
     if (e.key === 'Enter' && state.screen === 'game') {
       if (document.activeElement !== els.chatInput) {
         e.preventDefault();
@@ -1235,8 +1231,87 @@ function init() {
         setTimeout(() => els.chatInput?.focus(), 100);
       }
     }
+    
+    if ((e.key === 'c' || e.key === 'C') && state.screen === 'game') {
+      toggleChat();
+    }
+    
+    if ((e.key === 'p' || e.key === 'P') && state.screen === 'game') {
+      toggleProfile();
+    }
+    
+    if (e.key >= '1' && e.key <= '9' && state.screen === 'game') {
+      const index = parseInt(e.key) - 1;
+      const hand = state.gameState?.players?.find(p => p.isMe)?.hand;
+      if (hand && hand[index]) {
+        const card = hand[index];
+        const isMyTurn = state.gameState?.currentPlayerId === state.myId;
+        const playable = isMyTurn && canPlayCard(card, state.gameState?.topCard, state.gameState?.currentColor, state.gameState?.mustDraw, true);
+        if (playable) {
+          if (card.type === 'wild' || card.type === 'wild4') {
+            state.pendingCard = { card, index };
+            showColorPicker();
+          } else {
+            socket.emit('playCard', { cardIndex: index });
+          }
+        }
+      }
+    }
   });
 }
 
-// Start the app
+async function loadLeaderboard() {
+  try {
+    const response = await fetch('/api/leaderboard');
+    const data = await response.json();
+    const container = document.getElementById('leaderboard-list');
+    if (container) {
+      container.innerHTML = '';
+      data.forEach((user, idx) => {
+        const div = document.createElement('div');
+        div.className = 'leaderboard-item';
+        div.innerHTML = `
+          <span class="rank">${idx + 1}</span>
+          <img src="${user.avatar}" width="30" height="30" style="border-radius:50%">
+          <span class="name">${escapeHtml(user.displayName)}</span>
+          <span class="wins">🏆 ${user.wins}</span>
+        `;
+        container.appendChild(div);
+      });
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function loadOnlineCount() {
+  try {
+    const response = await fetch('/api/online-users');
+    const data = await response.json();
+    const onlineEl = document.getElementById('online-count');
+    if (onlineEl) onlineEl.textContent = data.count;
+  } catch(e) { console.error(e); }
+}
+
+function init() {
+  initEventListeners();
+  initKeyboardShortcuts();
+  loadLeaderboard();
+  loadOnlineCount();
+  
+  setInterval(() => {
+    if (socket && socket.connected) {
+      socket.emit('getRoomList');
+    }
+    loadOnlineCount();
+  }, 30000);
+  
+  const savedSession = localStorage.getItem('uno_session');
+  if (savedSession) {
+    authState.sessionToken = savedSession;
+    showLoading('Tizimga kirilmoqda...');
+    initSocket();
+  } else {
+    showScreen('auth');
+  }
+}
+
 init();
