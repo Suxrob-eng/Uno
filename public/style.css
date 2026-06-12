@@ -1358,17 +1358,23 @@ html, body {
 }
 
 /* Playable card highlighting */
-.card.dimmed {
-  opacity: 0.6;
+.hand-card.dimmed {
+  opacity: 0.5;
   filter: grayscale(30%);
+  cursor: not-allowed;
+  transform: translateY(10px);
 }
 
-.card.playable {
+.hand-card.dimmed:hover {
+  transform: translateY(10px);
+}
+
+.hand-card.playable {
   animation: playable-glow 2s infinite alternate;
   cursor: pointer;
 }
 
-.card.playable:hover {
+.hand-card.playable:hover {
   transform: translateY(-15px) scale(1.05) !important;
 }
 
