@@ -1,10 +1,11 @@
 // ==========================================
-//   UNO ONLINE - CLIENT GAME LOGIC (COMPLETE REWRITE)
+//   UNO ONLINE - CLIENT GAME LOGIC (FULLY FIXED)
 // ==========================================
 
 let socket = null;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
+let socketEventsSetup = false;
 
 // ==================== AUTH STATE ====================
 let authState = {
@@ -138,7 +139,8 @@ const els = {
 
 // ==================== SCREEN MANAGEMENT ====================
 function showScreen(name) {
-  Object.values(screens).forEach(s => {
+  Object.keys(screens).forEach(key => {
+    const s = screens[key];
     if (s) {
       s.classList.remove('active');
       s.style.display = 'none';
@@ -146,7 +148,7 @@ function showScreen(name) {
   });
   if (screens[name]) {
     screens[name].style.display = 'flex';
-    requestAnimationFrame(() => screens[name].classList.add('active'));
+    setTimeout(() => screens[name].classList.add('active'), 10);
   }
   state.screen = name;
 }
@@ -170,9 +172,419 @@ function showNotif(msg) {
   notifTimeout = setTimeout(() => els.notifToast.classList.add('hidden'), 3000);
 }
 
+// ==================== CARD FUNCTIONS ====================
+function getCardLabel(card) {
+  if (!card) return '?';
+  const labels = { 'skip': '⊘', 'reverse': '↺', 'draw2': '+2', 'wild': '★', 'wild4': '+4' };
+  return labels[card.value] || card.value;
+}
+
+function createCardElement(card, isPlayable = true) {
+  const div = document.createElement('div');
+  const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
+  div.className = `card ${colorClass}`;
+  const label = getCardLabel(card);
+  div.innerHTML = `
+    <span class="card-corner tl">${label}</span>
+    <span class="card-value-center">${label}</span>
+    <span class="card-corner br">${label}</span>
+  `;
+  if (!isPlayable) div.classList.add('not-playable');
+  return div;
+}
+
+function renderTopCard(card) {
+  if (!card || !els.topCard) return;
+  const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
+  const label = getCardLabel(card);
+  els.topCard.className = `card top-card ${colorClass}`;
+  els.topCard.innerHTML = `
+    <span class="card-corner tl">${label}</span>
+    <span class="card-value-center">${label}</span>
+    <span class="card-corner br">${label}</span>
+  `;
+}
+
+function getColorName(color) {
+  const names = { red: '🔴 Qizil', green: '🟢 Yashil', blue: '🔵 Ko\'k', yellow: '🟡 Sariq' };
+  return names[color] || color;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(str || ''));
+  return div.innerHTML;
+}
+
+// ==================== GAME UI UPDATE ====================
+function updateGameUI(gs) {
+  if (!gs) return;
+  state.gameState = gs;
+
+  const me = gs.players?.find(p => p.isMe);
+  const isMyTurn = gs.currentPlayerId === state.myId;
+
+  if (gs.topCard) renderTopCard(gs.topCard);
+
+  if (els.currentColorBadge && gs.currentColor) {
+    els.currentColorBadge.className = `color-badge ${gs.currentColor}`;
+    els.currentColorBadge.textContent = getColorName(gs.currentColor);
+  }
+  if (els.deckCount) els.deckCount.textContent = gs.deckCount || 0;
+
+  const currentPlayer = gs.players?.find(p => p.isCurrentPlayer);
+  if (els.currentTurnName) {
+    els.currentTurnName.textContent = currentPlayer
+      ? (currentPlayer.isMe ? 'Siz' : (currentPlayer.displayName || currentPlayer.name))
+      : '—';
+  }
+  if (els.directionIndicator) {
+    els.directionIndicator.textContent = gs.direction === 1 ? '→' : '←';
+  }
+  
+  if (gs.gameState === 'playing' && gs.turnStartTime && gs.turnDuration) {
+    const container = document.getElementById('turn-timer-container');
+    const bar = document.getElementById('turn-timer-bar');
+    if (container && bar) {
+      container.style.display = 'block';
+      if (turnTimerInterval) clearInterval(turnTimerInterval);
+      
+      const updateTimer = () => {
+        const elapsed = Date.now() - gs.turnStartTime;
+        let remaining = gs.turnDuration - elapsed;
+        if (remaining < 0) remaining = 0;
+        
+        let percent = (remaining / gs.turnDuration) * 100;
+        bar.style.width = percent + '%';
+        
+        if (percent > 50) {
+          bar.style.background = '#2ecc71';
+        } else if (percent > 20) {
+          bar.style.background = '#f1c40f';
+        } else {
+          bar.style.background = '#e74c3c';
+        }
+      };
+      
+      updateTimer();
+      turnTimerInterval = setInterval(updateTimer, 100);
+    }
+  } else {
+    const container = document.getElementById('turn-timer-container');
+    if (container) container.style.display = 'none';
+    if (turnTimerInterval) clearInterval(turnTimerInterval);
+  }
+
+  if (me) {
+    if (els.myCardCount) els.myCardCount.textContent = `${me.cardCount} karta`;
+  }
+
+  renderMyHand(gs, isMyTurn);
+  renderOtherPlayers(gs);
+
+  if (els.drawBtn) {
+    if (isMyTurn && gs.gameState === 'playing') {
+      els.drawBtn.classList.remove('disabled');
+    } else {
+      els.drawBtn.classList.add('disabled');
+    }
+  }
+
+  if (els.unoBtn) {
+    els.unoBtn.style.display = (me && me.cardCount <= 2 && me.cardCount > 0 && gs.gameState === 'playing') ? 'block' : 'none';
+  }
+
+  const catchTarget = gs.players?.find(p => !p.isMe && p.cardCount === 1 && !p.saidUno);
+  if (els.catchUnoBtn) {
+    if (catchTarget && gs.gameState === 'playing') {
+      els.catchUnoBtn.style.display = 'block';
+      els.catchUnoBtn.dataset.targetId = catchTarget.id;
+    } else {
+      els.catchUnoBtn.style.display = 'none';
+    }
+  }
+
+  if (gs.gameState === 'finished' && gs.winner) showWinModal(gs.winner);
+}
+
+function canPlayCard(card, topCard, currentColor, mustDraw, isCurrentPlayer = true) {
+  if (!card || !topCard) return false;
+  if (!isCurrentPlayer) return false;
+  if (mustDraw) return card.value === 'draw2' || card.value === 'wild4';
+  if (card.type === 'wild' || card.type === 'wild4') return true;
+  if (card.color === currentColor) return true;
+  if (card.value === topCard.value) return true;
+  return false;
+}
+
+function renderMyHand(gs, isMyTurn) {
+  if (!els.myHand) return;
+  els.myHand.innerHTML = '';
+  const myHandData = gs.players?.find(p => p.isMe)?.hand || [];
+  
+  let mappedHand = myHandData.map((card, idx) => ({ ...card, originalIndex: idx }));
+  
+  if (state.sortMethod === 'color') {
+    mappedHand.sort((a, b) => {
+      if (a.color === b.color) return (a.value || '').localeCompare(b.value || '');
+      return (a.color || 'z').localeCompare(b.color || 'z');
+    });
+  } else if (state.sortMethod === 'value') {
+    mappedHand.sort((a, b) => {
+      if (a.value === b.value) return (a.color || 'z').localeCompare(b.color || 'z');
+      return (a.value || '').localeCompare(b.value || '');
+    });
+  }
+
+  mappedHand.forEach((cardObj) => {
+    const card = cardObj;
+    const index = cardObj.originalIndex;
+    const isJumpIn = (!isMyTurn && card.type !== 'wild' && card.type !== 'wild4' && 
+                      card.color === gs.topCard?.color && card.value === gs.topCard?.value && !gs.mustDraw);
+    const playable = (isMyTurn && gs.gameState === 'playing' && canPlayCard(card, gs.topCard, gs.currentColor, gs.mustDraw, isMyTurn)) || 
+                     (gs.gameState === 'playing' && isJumpIn);
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'hand-card';
+    if (!playable) {
+      wrapper.classList.add('dimmed');
+    } else {
+      wrapper.classList.add('playable');
+    }
+    if (isJumpIn) wrapper.classList.add('jump-in-glow');
+    const cardEl = createCardElement(card, playable);
+    wrapper.appendChild(cardEl);
+    if (playable) wrapper.addEventListener('click', () => onPlayCard(card, index));
+    els.myHand.appendChild(wrapper);
+  });
+}
+
+function renderOtherPlayers(gs) {
+  if (!els.otherPlayers) return;
+  els.otherPlayers.innerHTML = '';
+  const otherPlayers = gs.players?.filter(p => !p.isMe) || [];
+  
+  otherPlayers.forEach(player => {
+    const area = document.createElement('div');
+    area.className = `opponent-area ${player.isCurrentPlayer ? 'active-glow' : ''}`;
+
+    const cardCount = Math.min(player.cardCount, 10);
+    let miniCards = '';
+    for (let i = 0; i < cardCount; i++) {
+      miniCards += `<div class="mini-card" style="z-index:${i}"></div>`;
+    }
+
+    area.innerHTML = `
+      <div class="opponent-info">
+        <div class="opponent-avatar"><img src="${player.avatar || '/avatars/default1.svg'}" width="32" height="32" style="border-radius:50%"></div>
+        <div class="opponent-name ${player.isCurrentPlayer ? 'active' : ''}">
+          ${escapeHtml(player.displayName || player.name)} ${player.isCurrentPlayer ? '▼' : ''}
+        </div>
+        ${player.isBot ? '<span class="bot-indicator">🤖 BOT</span>' : ''}
+        <div class="card-count-badge">${player.cardCount} karta</div>
+        ${player.saidUno && player.cardCount === 1 ? '<div class="uno-badge">UNO!</div>' : ''}
+      </div>
+      <div class="opponent-cards">${miniCards}</div>
+    `;
+
+    els.otherPlayers.appendChild(area);
+  });
+}
+
+// ==================== PLAY CARD ====================
+function onPlayCard(card, index) {
+  if (!socket) return;
+  if (card.type === 'wild' || card.type === 'wild4') {
+    state.pendingCard = { card, index };
+    showColorPicker();
+  } else {
+    socket.emit('playCard', { cardIndex: index });
+  }
+}
+
+function showColorPicker() { 
+  if (els.colorPicker) els.colorPicker.classList.remove('hidden'); 
+}
+
+function hideColorPicker() { 
+  if (els.colorPicker) els.colorPicker.classList.add('hidden'); 
+}
+
+// ==================== WIN MODAL ====================
+function showWinModal(winner) {
+  if (!els.winModal) return;
+  const isWinner = winner?.id === state.myId;
+  const winnerIsBot = winner?.id && winner.id.toString().startsWith('BOT_');
+
+  if (typeof confetti === 'function') {
+    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+  }
+
+  if (isWinner) {
+    if (els.winTitle) els.winTitle.textContent = '🎉 Siz g\'oldingiz!';
+    if (els.winMessage) els.winMessage.textContent = 'Tabriklaymiz! Zo\'r o\'yin!';
+  } else if (winnerIsBot) {
+    if (els.winTitle) els.winTitle.textContent = '🤖 Bot g\'olib bo\'ldi!';
+    if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'Bot'} sizni yutdi! Yana bir bor urinib ko\'ring!`;
+  } else {
+    if (els.winTitle) els.winTitle.textContent = `😢 ${winner?.name || 'O\'yinchi'} g\'olib!`;
+    if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'O\'yinchi'} barcha kartalarini o\'ynadi!`;
+  }
+
+  if (els.playAgainBtn) els.playAgainBtn.style.display = state.isHost ? 'block' : 'none';
+  els.winModal.classList.remove('hidden');
+}
+
+// ==================== WAITING ROOM ====================
+function updateWaitingRoom(gs) {
+  if (!els.waitingPlayers) return;
+  els.waitingPlayers.innerHTML = '';
+
+  const capacityText = document.getElementById('waiting-capacity-text');
+  const capacityFill = document.getElementById('capacity-fill');
+  if (capacityText && capacityFill && gs) {
+    capacityText.textContent = `${gs.players?.length || 0}/${gs.maxPlayers || 8} o'yinchi`;
+    const percent = Math.min(100, ((gs.players?.length || 0) / (gs.maxPlayers || 8)) * 100);
+    capacityFill.style.width = `${percent}%`;
+  }
+
+  const privacyBadge = document.getElementById('room-privacy-badge');
+  if (privacyBadge && gs) {
+    if (gs.privacy === 'private') {
+      privacyBadge.className = 'privacy-badge private';
+      privacyBadge.innerHTML = '🔒 Yopiq';
+    } else {
+      privacyBadge.className = 'privacy-badge open';
+      privacyBadge.innerHTML = '🌐 Ochiq';
+    }
+  }
+
+  const avatarColors = ['#e74c3c', '#3498db', '#27ae60', '#f39c12'];
+  const humanEmojis = ['😎', '🦊', '🐼', '🦁'];
+  const players = gs?.players || [];
+
+  players.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'waiting-player';
+
+    const isMe = p.id === state.myId;
+    const canRemove = state.isHost && p.isBot && gs?.gameState === 'waiting';
+
+    div.innerHTML = `
+      <div class="player-avatar" style="background:${avatarColors[i % 4]}20;border:2px solid ${avatarColors[i % 4]}">
+        ${p.isBot ? '🤖' : humanEmojis[i % 4]}
+      </div>
+      <div class="waiting-player-info">
+        <div class="waiting-player-name">${escapeHtml(p.displayName || p.name)}</div>
+        <div class="waiting-player-role">
+          ${isMe ? 'Sen · ' : ''}${i === 0 ? 'Host' : 'O\'yinchi'}
+          ${p.isBot ? '<span class="bot-badge">BOT</span>' : ''}
+        </div>
+      </div>
+      ${isMe ? '<span style="color:#ffd32a;font-size:16px">★</span>' : ''}
+      ${canRemove ? `<button class="remove-bot-btn" data-bot-id="${p.id}" title="Botni o'chirish">✕</button>` : ''}
+    `;
+
+    const removeBtn = div.querySelector('.remove-bot-btn');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (socket) socket.emit('removeBot', { botId: removeBtn.dataset.botId });
+      });
+    }
+
+    els.waitingPlayers.appendChild(div);
+  });
+
+  if (state.isHost) {
+    if (els.botControls) els.botControls.style.display = (players.length < (gs?.maxPlayers || 8)) ? 'flex' : 'none';
+    if (els.startGameBtn) els.startGameBtn.style.display = players.filter(p => !p.isBot).length >= 1 ? 'block' : 'none';
+    if (els.waitingMessage) {
+      els.waitingMessage.textContent = players.filter(p => !p.isBot).length < 1
+        ? 'Kamida 1 haqiqiy o\'yinchi kerak...'
+        : 'O\'yinni boshlashga tayyor!';
+    }
+  } else {
+    if (els.botControls) els.botControls.style.display = 'none';
+    if (els.startGameBtn) els.startGameBtn.style.display = 'none';
+    if (els.waitingMessage) els.waitingMessage.textContent = 'Host o\'yinni boshlashini kutmoqda...';
+  }
+}
+
+// ==================== CHAT ====================
+function addChatMessage(data) {
+  if (!els.chatMessages) return;
+  const div = document.createElement('div');
+
+  if (data.type === 'system') {
+    div.className = 'chat-msg system';
+    div.textContent = data.message;
+    if (state.screen !== 'game') {
+      showNotif(data.message);
+    }
+  } else if (data.type === 'uno') {
+    div.className = 'chat-msg uno-msg';
+    div.textContent = data.message;
+  } else {
+    const isMe = data.playerName === authState.user?.displayName;
+    div.className = `chat-msg ${isMe ? 'my-msg' : 'player-msg'}`;
+    div.innerHTML = `
+      ${!isMe ? `<div class="chat-sender">${escapeHtml(data.playerName)}</div>` : ''}
+      <div>${escapeHtml(data.message)}</div>
+    `;
+  }
+
+  els.chatMessages.appendChild(div);
+  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+
+  if (!state.chatOpen && state.screen === 'game') {
+    state.unreadChat++;
+    updateChatBadge();
+  }
+}
+
+function updateChatBadge() {
+  if (!els.chatToggleBtn) return;
+  let badge = els.chatToggleBtn.querySelector('.chat-badge');
+  if (state.unreadChat > 0) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'chat-badge';
+      els.chatToggleBtn.style.position = 'relative';
+      els.chatToggleBtn.appendChild(badge);
+    }
+    badge.textContent = state.unreadChat > 9 ? '9+' : state.unreadChat;
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+function toggleChat() {
+  state.chatOpen = !state.chatOpen;
+  if (els.chatPanel) els.chatPanel.classList.toggle('open', state.chatOpen);
+  if (state.chatOpen) {
+    state.unreadChat = 0;
+    updateChatBadge();
+    setTimeout(() => {
+      if (els.chatInput) els.chatInput.focus();
+    }, 300);
+  }
+}
+
+function sendChat() {
+  const msg = els.chatInput?.value.trim();
+  if (!msg || !socket) return;
+  socket.emit('chat', { message: msg.substring(0, 200) });
+  if (els.chatInput) els.chatInput.value = '';
+}
+
 // ==================== AUTH FUNCTIONS ====================
 function initSocket() {
-  if (socket && socket.connected) {
+  if (socket) {
+    if (socketEventsSetup) {
+      socket.removeAllListeners();
+      socketEventsSetup = false;
+    }
     socket.disconnect();
   }
   
@@ -185,6 +597,7 @@ function initSocket() {
   
   socket.on('connect', () => {
     console.log('Socket connected');
+    state.myId = socket.id;
     if (authState.sessionToken) {
       socket.emit('auth', { sessionToken: authState.sessionToken });
     }
@@ -210,9 +623,12 @@ function initSocket() {
   });
   
   setupSocketEvents();
+  socketEventsSetup = true;
 }
 
 function setupSocketEvents() {
+  if (!socket) return;
+  
   socket.on('roomCreated', ({ roomId }) => {
     state.roomId = roomId;
     state.isHost = true;
@@ -400,6 +816,8 @@ function logout() {
   
   if (socket) {
     socket.disconnect();
+    socket = null;
+    socketEventsSetup = false;
   }
   
   showScreen('auth');
@@ -486,400 +904,6 @@ async function saveProfile() {
   }
 }
 
-// ==================== CARD FUNCTIONS ====================
-function getCardLabel(card) {
-  if (!card) return '?';
-  const labels = { 'skip': '⊘', 'reverse': '↺', 'draw2': '+2', 'wild': '★', 'wild4': '+4' };
-  return labels[card.value] || card.value;
-}
-
-function createCardElement(card, isPlayable = true) {
-  const div = document.createElement('div');
-  const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
-  div.className = `card ${colorClass}`;
-  const label = getCardLabel(card);
-  div.innerHTML = `
-    <span class="card-corner tl">${label}</span>
-    <span class="card-value-center">${label}</span>
-    <span class="card-corner br">${label}</span>
-  `;
-  if (!isPlayable) div.classList.add('not-playable');
-  return div;
-}
-
-function renderTopCard(card) {
-  if (!card || !els.topCard) return;
-  const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
-  const label = getCardLabel(card);
-  els.topCard.className = `card top-card ${colorClass}`;
-  els.topCard.innerHTML = `
-    <span class="card-corner tl">${label}</span>
-    <span class="card-value-center">${label}</span>
-    <span class="card-corner br">${label}</span>
-  `;
-}
-
-function getColorName(color) {
-  const names = { red: '🔴 Qizil', green: '🟢 Yashil', blue: '🔵 Ko\'k', yellow: '🟡 Sariq' };
-  return names[color] || color;
-}
-
-// ==================== GAME UI UPDATE ====================
-function updateGameUI(gs) {
-  if (!gs) return;
-  state.gameState = gs;
-
-  const me = gs.players?.find(p => p.isMe);
-  const isMyTurn = gs.currentPlayerId === state.myId;
-
-  if (gs.topCard) renderTopCard(gs.topCard);
-
-  if (els.currentColorBadge && gs.currentColor) {
-    els.currentColorBadge.className = `color-badge ${gs.currentColor}`;
-    els.currentColorBadge.textContent = getColorName(gs.currentColor);
-  }
-  if (els.deckCount) els.deckCount.textContent = gs.deckCount || 0;
-
-  const currentPlayer = gs.players?.find(p => p.isCurrentPlayer);
-  if (els.currentTurnName) {
-    els.currentTurnName.textContent = currentPlayer
-      ? (currentPlayer.isMe ? 'Siz' : currentPlayer.name)
-      : '—';
-  }
-  if (els.directionIndicator) {
-    els.directionIndicator.textContent = gs.direction === 1 ? '→' : '←';
-  }
-  
-  if (gs.gameState === 'playing' && gs.turnStartTime && gs.turnDuration) {
-    const container = document.getElementById('turn-timer-container');
-    const bar = document.getElementById('turn-timer-bar');
-    if (container && bar) {
-      container.style.display = 'block';
-      if (turnTimerInterval) clearInterval(turnTimerInterval);
-      
-      const updateTimer = () => {
-        const elapsed = Date.now() - gs.turnStartTime;
-        let remaining = gs.turnDuration - elapsed;
-        if (remaining < 0) remaining = 0;
-        
-        let percent = (remaining / gs.turnDuration) * 100;
-        bar.style.width = percent + '%';
-        
-        if (percent > 50) {
-          bar.style.background = '#2ecc71';
-        } else if (percent > 20) {
-          bar.style.background = '#f1c40f';
-        } else {
-          bar.style.background = '#e74c3c';
-        }
-      };
-      
-      updateTimer();
-      turnTimerInterval = setInterval(updateTimer, 100);
-    }
-  } else {
-    const container = document.getElementById('turn-timer-container');
-    if (container) container.style.display = 'none';
-    if (turnTimerInterval) clearInterval(turnTimerInterval);
-  }
-
-  if (me) {
-    if (els.myCardCount) els.myCardCount.textContent = `${me.cardCount} karta`;
-  }
-
-  renderMyHand(gs, isMyTurn);
-  renderOtherPlayers(gs);
-
-  if (els.drawBtn) {
-    els.drawBtn.classList.toggle('disabled', !isMyTurn || gs.gameState !== 'playing');
-  }
-
-  if (els.unoBtn) {
-    els.unoBtn.style.display = (me && me.cardCount <= 2 && gs.gameState === 'playing') ? 'block' : 'none';
-  }
-
-  const catchTarget = gs.players?.find(p => !p.isMe && p.cardCount === 1 && !p.saidUno);
-  if (els.catchUnoBtn) {
-    if (catchTarget && gs.gameState === 'playing') {
-      els.catchUnoBtn.style.display = 'block';
-      els.catchUnoBtn.dataset.targetId = catchTarget.id;
-    } else {
-      els.catchUnoBtn.style.display = 'none';
-    }
-  }
-
-  if (gs.gameState === 'finished' && gs.winner) showWinModal(gs.winner);
-}
-
-function canPlayCard(card, topCard, currentColor, mustDraw, isCurrentPlayer = true) {
-  if (!card || !topCard) return false;
-  if (!isCurrentPlayer) return false;
-  if (mustDraw) return card.value === 'draw2' || card.value === 'wild4';
-  if (card.type === 'wild' || card.type === 'wild4') return true;
-  if (card.color === currentColor) return true;
-  if (card.value === topCard.value) return true;
-  return false;
-}
-
-function renderMyHand(gs, isMyTurn) {
-  if (!els.myHand) return;
-  els.myHand.innerHTML = '';
-  const myHandData = gs.players?.find(p => p.isMe)?.hand || [];
-  
-  let mappedHand = myHandData.map((card, idx) => ({ ...card, originalIndex: idx }));
-  
-  if (state.sortMethod === 'color') {
-    mappedHand.sort((a, b) => {
-      if (a.color === b.color) return (a.value || '').localeCompare(b.value || '');
-      return (a.color || 'z').localeCompare(b.color || 'z');
-    });
-  } else if (state.sortMethod === 'value') {
-    mappedHand.sort((a, b) => {
-      if (a.value === b.value) return (a.color || 'z').localeCompare(b.color || 'z');
-      return (a.value || '').localeCompare(b.value || '');
-    });
-  }
-
-  mappedHand.forEach((cardObj) => {
-    const card = cardObj;
-    const index = cardObj.originalIndex;
-    const isJumpIn = (!isMyTurn && card.type !== 'wild' && card.type !== 'wild4' && 
-                      card.color === gs.topCard?.color && card.value === gs.topCard?.value && !gs.mustDraw);
-    const playable = (isMyTurn && gs.gameState === 'playing' && canPlayCard(card, gs.topCard, gs.currentColor, gs.mustDraw, isMyTurn)) || 
-                     (gs.gameState === 'playing' && isJumpIn);
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'hand-card';
-    if (!playable) {
-      wrapper.classList.add('dimmed');
-    } else {
-      wrapper.classList.add('playable');
-    }
-    if (isJumpIn) wrapper.classList.add('jump-in-glow');
-    const cardEl = createCardElement(card, playable);
-    wrapper.appendChild(cardEl);
-    if (playable) wrapper.addEventListener('click', () => onPlayCard(card, index));
-    els.myHand.appendChild(wrapper);
-  });
-}
-
-function renderOtherPlayers(gs) {
-  if (!els.otherPlayers) return;
-  els.otherPlayers.innerHTML = '';
-  const otherPlayers = gs.players?.filter(p => !p.isMe) || [];
-  
-  otherPlayers.forEach(player => {
-    const area = document.createElement('div');
-    area.className = `opponent-area ${player.isCurrentPlayer ? 'active-glow' : ''}`;
-
-    const cardCount = Math.min(player.cardCount, 10);
-    let miniCards = '';
-    for (let i = 0; i < cardCount; i++) {
-      miniCards += `<div class="mini-card" style="z-index:${i}"></div>`;
-    }
-
-    area.innerHTML = `
-      <div class="opponent-info">
-        <div class="opponent-avatar"><img src="${player.avatar || '/avatars/default1.svg'}" width="32" height="32" style="border-radius:50%"></div>
-        <div class="opponent-name ${player.isCurrentPlayer ? 'active' : ''}">
-          ${escapeHtml(player.displayName || player.name)} ${player.isCurrentPlayer ? '▼' : ''}
-        </div>
-        ${player.isBot ? '<span class="bot-indicator">🤖 BOT</span>' : ''}
-        <div class="card-count-badge">${player.cardCount} karta</div>
-        ${player.saidUno && player.cardCount === 1 ? '<div class="uno-badge">UNO!</div>' : ''}
-      </div>
-      <div class="opponent-cards">${miniCards}</div>
-    `;
-
-    els.otherPlayers.appendChild(area);
-  });
-}
-
-// ==================== PLAY CARD ====================
-function onPlayCard(card, index) {
-  if (card.type === 'wild' || card.type === 'wild4') {
-    state.pendingCard = { card, index };
-    showColorPicker();
-  } else {
-    socket.emit('playCard', { cardIndex: index });
-  }
-}
-
-function showColorPicker() { 
-  if (els.colorPicker) els.colorPicker.classList.remove('hidden'); 
-}
-
-function hideColorPicker() { 
-  if (els.colorPicker) els.colorPicker.classList.add('hidden'); 
-}
-
-// ==================== WIN MODAL ====================
-function showWinModal(winner) {
-  if (!els.winModal) return;
-  const isWinner = winner?.id === state.myId;
-  const winnerIsBot = winner?.id && winner.id.toString().startsWith('BOT_');
-
-  if (typeof confetti === 'function') {
-    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-  }
-
-  if (isWinner) {
-    if (els.winTitle) els.winTitle.textContent = '🎉 Siz g\'oldingiz!';
-    if (els.winMessage) els.winMessage.textContent = 'Tabriklaymiz! Zo\'r o\'yin!';
-  } else if (winnerIsBot) {
-    if (els.winTitle) els.winTitle.textContent = '🤖 Bot g\'olib bo\'ldi!';
-    if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'Bot'} sizni yutdi! Yana bir bor urinib ko\'ring!`;
-  } else {
-    if (els.winTitle) els.winTitle.textContent = `😢 ${winner?.name || 'O\'yinchi'} g\'olib!`;
-    if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'O\'yinchi'} barcha kartalarini o\'ynadi!`;
-  }
-
-  if (els.playAgainBtn) els.playAgainBtn.style.display = state.isHost ? 'block' : 'none';
-  els.winModal.classList.remove('hidden');
-}
-
-// ==================== WAITING ROOM ====================
-function updateWaitingRoom(gs) {
-  if (!els.waitingPlayers) return;
-  els.waitingPlayers.innerHTML = '';
-
-  const capacityText = document.getElementById('waiting-capacity-text');
-  const capacityFill = document.getElementById('capacity-fill');
-  if (capacityText && capacityFill && gs) {
-    capacityText.textContent = `${gs.players?.length || 0}/${gs.maxPlayers || 8} o'yinchi`;
-    const percent = Math.min(100, ((gs.players?.length || 0) / (gs.maxPlayers || 8)) * 100);
-    capacityFill.style.width = `${percent}%`;
-  }
-
-  const privacyBadge = document.getElementById('room-privacy-badge');
-  if (privacyBadge && gs) {
-    if (gs.privacy === 'private') {
-      privacyBadge.className = 'privacy-badge private';
-      privacyBadge.innerHTML = '🔒 Yopiq';
-    } else {
-      privacyBadge.className = 'privacy-badge open';
-      privacyBadge.innerHTML = '🌐 Ochiq';
-    }
-  }
-
-  const avatarColors = ['#e74c3c', '#3498db', '#27ae60', '#f39c12'];
-  const humanEmojis = ['😎', '🦊', '🐼', '🦁'];
-  const players = gs?.players || [];
-
-  players.forEach((p, i) => {
-    const div = document.createElement('div');
-    div.className = 'waiting-player';
-
-    const isMe = p.id === state.myId;
-    const canRemove = state.isHost && p.isBot && gs?.gameState === 'waiting';
-
-    div.innerHTML = `
-      <div class="player-avatar" style="background:${avatarColors[i % 4]}20;border:2px solid ${avatarColors[i % 4]}">
-        ${p.isBot ? '🤖' : humanEmojis[i % 4]}
-      </div>
-      <div class="waiting-player-info">
-        <div class="waiting-player-name">${escapeHtml(p.displayName || p.name)}</div>
-        <div class="waiting-player-role">
-          ${isMe ? 'Sen · ' : ''}${i === 0 ? 'Host' : 'O\'yinchi'}
-          ${p.isBot ? '<span class="bot-badge">BOT</span>' : ''}
-        </div>
-      </div>
-      ${isMe ? '<span style="color:#ffd32a;font-size:16px">★</span>' : ''}
-      ${canRemove ? `<button class="remove-bot-btn" data-bot-id="${p.id}" title="Botni o'chirish">✕</button>` : ''}
-    `;
-
-    const removeBtn = div.querySelector('.remove-bot-btn');
-    if (removeBtn) {
-      removeBtn.addEventListener('click', () => {
-        socket.emit('removeBot', { botId: removeBtn.dataset.botId });
-      });
-    }
-
-    els.waitingPlayers.appendChild(div);
-  });
-
-  if (state.isHost) {
-    if (els.botControls) els.botControls.style.display = (players.length < (gs?.maxPlayers || 8)) ? 'flex' : 'none';
-    if (els.startGameBtn) els.startGameBtn.style.display = players.filter(p => !p.isBot).length >= 1 ? 'block' : 'none';
-    if (els.waitingMessage) {
-      els.waitingMessage.textContent = players.filter(p => !p.isBot).length < 1
-        ? 'Kamida 1 haqiqiy o\'yinchi kerak...'
-        : 'O\'yinni boshlashga tayyor!';
-    }
-  } else {
-    if (els.botControls) els.botControls.style.display = 'none';
-    if (els.startGameBtn) els.startGameBtn.style.display = 'none';
-    if (els.waitingMessage) els.waitingMessage.textContent = 'Host o\'yinni boshlashini kutmoqda...';
-  }
-}
-
-// ==================== CHAT ====================
-function addChatMessage(data) {
-  if (!els.chatMessages) return;
-  const div = document.createElement('div');
-
-  if (data.type === 'system') {
-    div.className = 'chat-msg system';
-    div.textContent = data.message;
-    if (state.screen !== 'game') {
-      showNotif(data.message);
-    }
-  } else if (data.type === 'uno') {
-    div.className = 'chat-msg uno-msg';
-    div.textContent = data.message;
-  } else {
-    const isMe = data.playerName === authState.user?.displayName;
-    div.className = `chat-msg ${isMe ? 'my-msg' : 'player-msg'}`;
-    div.innerHTML = `
-      ${!isMe ? `<div class="chat-sender">${escapeHtml(data.playerName)}</div>` : ''}
-      <div>${escapeHtml(data.message)}</div>
-    `;
-  }
-
-  els.chatMessages.appendChild(div);
-  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
-
-  if (!state.chatOpen && state.screen === 'game') {
-    state.unreadChat++;
-    updateChatBadge();
-  }
-}
-
-function updateChatBadge() {
-  if (!els.chatToggleBtn) return;
-  let badge = els.chatToggleBtn.querySelector('.chat-badge');
-  if (state.unreadChat > 0) {
-    if (!badge) {
-      badge = document.createElement('div');
-      badge.className = 'chat-badge';
-      els.chatToggleBtn.style.position = 'relative';
-      els.chatToggleBtn.appendChild(badge);
-    }
-    badge.textContent = state.unreadChat > 9 ? '9+' : state.unreadChat;
-  } else if (badge) {
-    badge.remove();
-  }
-}
-
-function toggleChat() {
-  state.chatOpen = !state.chatOpen;
-  if (els.chatPanel) els.chatPanel.classList.toggle('open', state.chatOpen);
-  if (state.chatOpen) {
-    state.unreadChat = 0;
-    updateChatBadge();
-    setTimeout(() => {
-      if (els.chatInput) els.chatInput.focus();
-    }, 300);
-  }
-}
-
-function sendChat() {
-  const msg = els.chatInput?.value.trim();
-  if (!msg) return;
-  socket.emit('chat', { message: msg.substring(0, 200) });
-  if (els.chatInput) els.chatInput.value = '';
-}
-
 // ==================== JOIN / CREATE ROOM ====================
 let isJoining = false;
 
@@ -894,6 +918,11 @@ function joinRoom(roomId) {
     return;
   }
   
+  if (!socket || !socket.connected) {
+    showError('Serverga ulanish yo\'q!');
+    return;
+  }
+  
   isJoining = true;
   showLoading('Xonaga qo\'shilmoqda...');
   
@@ -901,7 +930,7 @@ function joinRoom(roomId) {
   
   setTimeout(() => {
     isJoining = false;
-  }, 3000);
+  }, 5000);
 }
 
 function createRoom() {
@@ -915,11 +944,15 @@ function createRoom() {
 }
 
 function confirmCreateRoom() {
-  const selectedPrivacy = document.querySelector('.room-type-btn.active')?.dataset.type || 'open';
-  const maxPlayers = parseInt(document.getElementById('max-players-display')?.textContent || '8');
+  const activeBtn = document.querySelector('.room-type-btn.active');
+  const selectedPrivacy = activeBtn?.dataset.type || 'open';
+  const maxPlayersDisplay = document.getElementById('max-players-display');
+  const maxPlayers = parseInt(maxPlayersDisplay?.textContent || '8');
   
   showLoading('Xona yaratilmoqda...');
-  socket.emit('createRoom', { privacy: selectedPrivacy, maxPlayers });
+  if (socket) {
+    socket.emit('createRoom', { privacy: selectedPrivacy, maxPlayers });
+  }
   
   const modal = document.getElementById('create-room-modal');
   if (modal) modal.classList.add('hidden');
@@ -945,15 +978,13 @@ function showFloatingReaction(playerId, emoji) {
   setTimeout(() => el.remove(), 2000);
 }
 
-// ==================== UTILITY ====================
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.appendChild(document.createTextNode(str || ''));
-  return div.innerHTML;
-}
-
 // ==================== EVENT LISTENERS ====================
+let eventListenersInitialized = false;
+
 function initEventListeners() {
+  if (eventListenersInitialized) return;
+  eventListenersInitialized = true;
+  
   // Auth tabs
   if (els.loginTab) {
     els.loginTab.addEventListener('click', () => {
@@ -992,13 +1023,23 @@ function initEventListeners() {
   if (els.saveProfileBtn) els.saveProfileBtn.addEventListener('click', saveProfile);
   
   if (els.createRoomBtn) els.createRoomBtn.addEventListener('click', createRoom);
-  if (els.joinRoomBtn) els.joinRoomBtn.addEventListener('click', () => {
-    const code = els.roomCode?.value.trim().toUpperCase();
-    if (code) joinRoom(code);
-    else showError('Xona kodini kiriting!');
-  });
-  if (els.refreshRoomsBtn) els.refreshRoomsBtn.addEventListener('click', () => socket.emit('getRoomList'));
-  if (els.startGameBtn) els.startGameBtn.addEventListener('click', () => socket.emit('startGame'));
+  if (els.joinRoomBtn) {
+    els.joinRoomBtn.addEventListener('click', () => {
+      const code = els.roomCode?.value.trim().toUpperCase();
+      if (code) joinRoom(code);
+      else showError('Xona kodini kiriting!');
+    });
+  }
+  if (els.refreshRoomsBtn) {
+    els.refreshRoomsBtn.addEventListener('click', () => {
+      if (socket) socket.emit('getRoomList');
+    });
+  }
+  if (els.startGameBtn) {
+    els.startGameBtn.addEventListener('click', () => {
+      if (socket) socket.emit('startGame');
+    });
+  }
   if (els.leaveRoomBtn) els.leaveRoomBtn.addEventListener('click', () => location.reload());
   if (els.copyCodeBtn) {
     els.copyCodeBtn.addEventListener('click', () => {
@@ -1014,27 +1055,31 @@ function initEventListeners() {
   if (els.addBotBtn) {
     els.addBotBtn.addEventListener('click', () => {
       const difficulty = els.botDifficulty?.value || 'medium';
-      socket.emit('addBot', { difficulty });
+      if (socket) socket.emit('addBot', { difficulty });
     });
   }
   
   if (els.drawBtn) {
     els.drawBtn.addEventListener('click', () => {
-      if (!els.drawBtn.classList.contains('disabled')) socket.emit('drawCard');
+      if (!els.drawBtn.classList.contains('disabled') && socket) {
+        socket.emit('drawCard');
+      }
     });
   }
   
   if (els.unoBtn) {
     els.unoBtn.addEventListener('click', () => {
-      socket.emit('sayUno');
-      showNotif('🎴 UNO!');
+      if (socket) {
+        socket.emit('sayUno');
+        showNotif('🎴 UNO!');
+      }
     });
   }
   
   if (els.catchUnoBtn) {
     els.catchUnoBtn.addEventListener('click', () => {
       const targetId = els.catchUnoBtn.dataset.targetId;
-      if (targetId) socket.emit('catchUno', { targetId });
+      if (targetId && socket) socket.emit('catchUno', { targetId });
     });
   }
   
@@ -1059,9 +1104,10 @@ function initEventListeners() {
     });
   }
   
+  // Color picker buttons
   document.querySelectorAll('.color-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (state.pendingCard) {
+      if (state.pendingCard && socket) {
         socket.emit('playCard', { cardIndex: state.pendingCard.index, chosenColor: btn.dataset.color });
         state.pendingCard = null;
       }
@@ -1069,15 +1115,16 @@ function initEventListeners() {
     });
   });
   
+  // Reaction buttons
   document.querySelectorAll('.btn-reaction').forEach(btn => {
     btn.addEventListener('click', () => {
-      socket.emit('reaction', { emoji: btn.dataset.emoji });
+      if (socket) socket.emit('reaction', { emoji: btn.dataset.emoji });
     });
   });
   
   if (els.playAgainBtn) {
     els.playAgainBtn.addEventListener('click', () => {
-      socket.emit('startGame');
+      if (socket) socket.emit('startGame');
       if (els.winModal) els.winModal.classList.add('hidden');
     });
   }
@@ -1145,10 +1192,18 @@ function initEventListeners() {
   if (confirmCreateBtn) {
     confirmCreateBtn.addEventListener('click', confirmCreateRoom);
   }
+  
+  // Color picker backdrop
+  const colorPickerBackdrop = document.querySelector('#color-picker .modal-backdrop');
+  if (colorPickerBackdrop) {
+    colorPickerBackdrop.addEventListener('click', hideColorPicker);
+  }
 }
 
 // ==================== INIT ====================
 function init() {
+  initEventListeners();
+  
   // Check for existing session
   const savedSession = localStorage.getItem('uno_session');
   if (savedSession) {
@@ -1159,13 +1214,11 @@ function init() {
     showScreen('auth');
   }
   
-  initEventListeners();
-  
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') hideColorPicker();
     if ((e.key === 'u' || e.key === 'U') && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
-      socket?.emit('sayUno');
+      if (socket) socket.emit('sayUno');
     }
     if (e.code === 'Space' && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
       e.preventDefault();
