@@ -758,7 +758,8 @@ io.on('connection', (socket) => {
       direction: 1, currentColor: null, gameState: 'waiting',
       pendingDraw: 0, mustDraw: false, winner: null,
       privacy: privacy || 'open', maxPlayers: maxPlayers || 8,
-      password: password || null, createdAt: Date.now()
+      password: password || null, createdAt: Date.now(),
+      turnStartTime: null, turnDuration: 20000, turnTimer: null
     };
     
     const room = rooms[roomId];

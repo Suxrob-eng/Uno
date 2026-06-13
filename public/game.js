@@ -9,1351 +9,1351 @@ let socketEventsSetup = false;
 
 // ==================== AUTH STATE ====================
 let authState = {
-  isAuthenticated: false,
-  sessionToken: null,
-  user: null,
-  loading: false
+    isAuthenticated: false,
+    sessionToken: null,
+    user: null,
+    loading: false
 };
 
 // ==================== GAME STATE ====================
 let state = {
-  screen: 'auth',
-  roomId: null,
-  myId: null,
-  isHost: false,
-  gameState: null,
-  pendingCard: null,
-  chatOpen: false,
-  unreadChat: 0,
-  sortMethod: 'none',
-  isLoading: false
+    screen: 'auth',
+    roomId: null,
+    myId: null,
+    isHost: false,
+    gameState: null,
+    pendingCard: null,
+    chatOpen: false,
+    unreadChat: 0,
+    sortMethod: 'none',
+    isLoading: false
 };
 
 let turnTimerInterval = null;
 
 // ==================== DOM REFERENCES ====================
 const screens = {
-  auth: document.getElementById('auth-screen'),
-  lobby: document.getElementById('lobby-screen'),
-  waiting: document.getElementById('waiting-screen'),
-  game: document.getElementById('game-screen')
+    auth: document.getElementById('auth-screen'),
+    lobby: document.getElementById('lobby-screen'),
+    waiting: document.getElementById('waiting-screen'),
+    game: document.getElementById('game-screen')
 };
 
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingText = document.getElementById('loading-text');
 
 function showLoading(message = 'Yuklanmoqda...') {
-  if (loadingOverlay) {
-    loadingText.textContent = message;
-    loadingOverlay.classList.remove('hidden');
-    state.isLoading = true;
-  }
+    if (loadingOverlay) {
+        loadingText.textContent = message;
+        loadingOverlay.classList.remove('hidden');
+        state.isLoading = true;
+    }
 }
 
 function hideLoading() {
-  if (loadingOverlay) {
-    loadingOverlay.classList.add('hidden');
-    state.isLoading = false;
-  }
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+        state.isLoading = false;
+    }
 }
 
 const els = {
-  loginTab: document.getElementById('login-tab'),
-  registerTab: document.getElementById('register-tab'),
-  loginForm: document.getElementById('login-form'),
-  registerForm: document.getElementById('register-form'),
-  loginUsername: document.getElementById('login-username'),
-  loginPassword: document.getElementById('login-password'),
-  loginBtn: document.getElementById('login-btn'),
-  registerUsername: document.getElementById('register-username'),
-  registerPassword: document.getElementById('register-password'),
-  registerDisplayName: document.getElementById('register-displayname'),
-  registerAvatar: document.getElementById('register-avatar'),
-  registerBtn: document.getElementById('register-btn'),
-  authError: document.getElementById('auth-error'),
-  
-  profileSidebar: document.getElementById('profile-sidebar'),
-  profileToggle: document.getElementById('profile-toggle'),
-  closeProfileBtn: document.getElementById('close-profile-btn'),
-  profileUsername: document.getElementById('profile-username'),
-  profileDisplayName: document.getElementById('profile-displayname'),
-  profileAvatar: document.getElementById('profile-avatar'),
-  profileWins: document.getElementById('profile-wins'),
-  profileGames: document.getElementById('profile-games'),
-  editProfileBtn: document.getElementById('edit-profile-btn'),
-  saveProfileBtn: document.getElementById('save-profile-btn'),
-  editDisplayName: document.getElementById('edit-displayname'),
-  editAvatar: document.getElementById('edit-avatar'),
-  profileEditSection: document.getElementById('profile-edit-section'),
-  logoutBtn: document.getElementById('logout-btn'),
-  
-  playerNameDisplay: document.getElementById('player-name-display'),
-  playerAvatar: document.getElementById('player-avatar'),
-  createRoomBtn: document.getElementById('create-room-btn'),
-  roomCode: document.getElementById('room-code'),
-  joinRoomBtn: document.getElementById('join-room-btn'),
-  refreshRoomsBtn: document.getElementById('refresh-rooms-btn'),
-  roomsList: document.getElementById('rooms-list'),
-  roomCodeDisplay: document.getElementById('room-code-display'),
-  copyCodeBtn: document.getElementById('copy-code-btn'),
-  waitingPlayers: document.getElementById('waiting-players'),
-  botControls: document.getElementById('bot-controls'),
-  addBotBtn: document.getElementById('add-bot-btn'),
-  botDifficulty: document.getElementById('bot-difficulty'),
-  startGameBtn: document.getElementById('start-game-btn'),
-  waitingMessage: document.getElementById('waiting-message'),
-  leaveRoomBtn: document.getElementById('leave-room-btn'),
-  otherPlayers: document.getElementById('other-players'),
-  topCard: document.getElementById('top-card'),
-  currentColorBadge: document.getElementById('current-color-badge'),
-  drawBtn: document.getElementById('draw-btn'),
-  deckCount: document.getElementById('deck-count'),
-  currentTurnName: document.getElementById('current-turn-name'),
-  directionIndicator: document.getElementById('direction-indicator'),
-  myHand: document.getElementById('my-hand'),
-  myNameDisplay: document.getElementById('my-name-display'),
-  myCardCount: document.getElementById('my-card-count'),
-  myAvatar: document.getElementById('my-avatar'),
-  unoBtn: document.getElementById('uno-btn'),
-  catchUnoBtn: document.getElementById('catch-uno-btn'),
-  chatPanel: document.getElementById('chat-panel'),
-  toggleChatBtn: document.getElementById('toggle-chat-btn'),
-  chatToggleBtn: document.getElementById('chat-toggle-btn'),
-  chatMessages: document.getElementById('chat-messages'),
-  chatInput: document.getElementById('chat-input'),
-  sendChatBtn: document.getElementById('send-chat-btn'),
-  colorPicker: document.getElementById('color-picker'),
-  winModal: document.getElementById('win-modal'),
-  winTitle: document.getElementById('win-title'),
-  winMessage: document.getElementById('win-message'),
-  playAgainBtn: document.getElementById('play-again-btn'),
-  goLobbyBtn: document.getElementById('go-lobby-btn'),
-  sortColorBtn: document.getElementById('sort-color-btn'),
-  sortValueBtn: document.getElementById('sort-value-btn'),
-  errorToast: document.getElementById('error-toast'),
-  notifToast: document.getElementById('notif-toast')
+    loginTab: document.getElementById('login-tab'),
+    registerTab: document.getElementById('register-tab'),
+    loginForm: document.getElementById('login-form'),
+    registerForm: document.getElementById('register-form'),
+    loginUsername: document.getElementById('login-username'),
+    loginPassword: document.getElementById('login-password'),
+    loginBtn: document.getElementById('login-btn'),
+    registerUsername: document.getElementById('register-username'),
+    registerPassword: document.getElementById('register-password'),
+    registerDisplayName: document.getElementById('register-displayname'),
+    registerAvatar: document.getElementById('register-avatar'),
+    registerBtn: document.getElementById('register-btn'),
+    authError: document.getElementById('auth-error'),
+
+    profileSidebar: document.getElementById('profile-sidebar'),
+    profileToggle: document.getElementById('profile-toggle'),
+    closeProfileBtn: document.getElementById('close-profile-btn'),
+    profileUsername: document.getElementById('profile-username'),
+    profileDisplayName: document.getElementById('profile-displayname'),
+    profileAvatar: document.getElementById('profile-avatar'),
+    profileWins: document.getElementById('profile-wins'),
+    profileGames: document.getElementById('profile-games'),
+    editProfileBtn: document.getElementById('edit-profile-btn'),
+    saveProfileBtn: document.getElementById('save-profile-btn'),
+    editDisplayName: document.getElementById('edit-displayname'),
+    editAvatar: document.getElementById('edit-avatar'),
+    profileEditSection: document.getElementById('profile-edit-section'),
+    logoutBtn: document.getElementById('logout-btn'),
+
+    playerNameDisplay: document.getElementById('player-name-display'),
+    playerAvatar: document.getElementById('player-avatar'),
+    createRoomBtn: document.getElementById('create-room-btn'),
+    roomCode: document.getElementById('room-code'),
+    joinRoomBtn: document.getElementById('join-room-btn'),
+    refreshRoomsBtn: document.getElementById('refresh-rooms-btn'),
+    roomsList: document.getElementById('rooms-list'),
+    roomCodeDisplay: document.getElementById('room-code-display'),
+    copyCodeBtn: document.getElementById('copy-code-btn'),
+    waitingPlayers: document.getElementById('waiting-players'),
+    botControls: document.getElementById('bot-controls'),
+    addBotBtn: document.getElementById('add-bot-btn'),
+    botDifficulty: document.getElementById('bot-difficulty'),
+    startGameBtn: document.getElementById('start-game-btn'),
+    waitingMessage: document.getElementById('waiting-message'),
+    leaveRoomBtn: document.getElementById('leave-room-btn'),
+    otherPlayers: document.getElementById('other-players'),
+    topCard: document.getElementById('top-card'),
+    currentColorBadge: document.getElementById('current-color-badge'),
+    drawBtn: document.getElementById('draw-btn'),
+    deckCount: document.getElementById('deck-count'),
+    currentTurnName: document.getElementById('current-turn-name'),
+    directionIndicator: document.getElementById('direction-indicator'),
+    myHand: document.getElementById('my-hand'),
+    myNameDisplay: document.getElementById('my-name-display'),
+    myCardCount: document.getElementById('my-card-count'),
+    myAvatar: document.getElementById('my-avatar'),
+    unoBtn: document.getElementById('uno-btn'),
+    catchUnoBtn: document.getElementById('catch-uno-btn'),
+    chatPanel: document.getElementById('chat-panel'),
+    toggleChatBtn: document.getElementById('toggle-chat-btn'),
+    chatToggleBtn: document.getElementById('chat-toggle-btn'),
+    chatMessages: document.getElementById('chat-messages'),
+    chatInput: document.getElementById('chat-input'),
+    sendChatBtn: document.getElementById('send-chat-btn'),
+    colorPicker: document.getElementById('color-picker'),
+    winModal: document.getElementById('win-modal'),
+    winTitle: document.getElementById('win-title'),
+    winMessage: document.getElementById('win-message'),
+    playAgainBtn: document.getElementById('play-again-btn'),
+    goLobbyBtn: document.getElementById('go-lobby-btn'),
+    sortColorBtn: document.getElementById('sort-color-btn'),
+    sortValueBtn: document.getElementById('sort-value-btn'),
+    errorToast: document.getElementById('error-toast'),
+    notifToast: document.getElementById('notif-toast')
 };
 
 function showScreen(name) {
-  Object.keys(screens).forEach(key => {
-    const s = screens[key];
-    if (s) {
-      s.classList.remove('active');
-      s.style.display = 'none';
+    Object.keys(screens).forEach(key => {
+        const s = screens[key];
+        if (s) {
+            s.classList.remove('active');
+            s.style.display = 'none';
+        }
+    });
+    if (screens[name]) {
+        screens[name].style.display = 'flex';
+        setTimeout(() => screens[name].classList.add('active'), 10);
     }
-  });
-  if (screens[name]) {
-    screens[name].style.display = 'flex';
-    setTimeout(() => screens[name].classList.add('active'), 10);
-  }
-  state.screen = name;
+    state.screen = name;
 }
 
 let errorTimeout, notifTimeout;
 
 function showError(msg) {
-  if (!els.errorToast) return;
-  els.errorToast.textContent = msg;
-  els.errorToast.classList.remove('hidden');
-  clearTimeout(errorTimeout);
-  errorTimeout = setTimeout(() => els.errorToast.classList.add('hidden'), 3000);
+    if (!els.errorToast) return;
+    els.errorToast.textContent = msg;
+    els.errorToast.classList.remove('hidden');
+    clearTimeout(errorTimeout);
+    errorTimeout = setTimeout(() => els.errorToast.classList.add('hidden'), 3000);
 }
 
 function showNotif(msg) {
-  if (!els.notifToast) return;
-  els.notifToast.textContent = msg;
-  els.notifToast.classList.remove('hidden');
-  clearTimeout(notifTimeout);
-  notifTimeout = setTimeout(() => els.notifToast.classList.add('hidden'), 3000);
+    if (!els.notifToast) return;
+    els.notifToast.textContent = msg;
+    els.notifToast.classList.remove('hidden');
+    clearTimeout(notifTimeout);
+    notifTimeout = setTimeout(() => els.notifToast.classList.add('hidden'), 3000);
 }
 
 function getCardLabel(card) {
-  if (!card) return '?';
-  const labels = { 'skip': '⊘', 'reverse': '↺', 'draw2': '+2', 'wild': '★', 'wild4': '+4' };
-  return labels[card.value] || card.value;
+    if (!card) return '?';
+    const labels = { 'skip': '⊘', 'reverse': '↺', 'draw2': '+2', 'wild': '★', 'wild4': '+4' };
+    return labels[card.value] || card.value;
 }
 
 function createCardElement(card, isPlayable = true) {
-  const div = document.createElement('div');
-  const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
-  div.className = `card ${colorClass}`;
-  const label = getCardLabel(card);
-  div.innerHTML = `
-    <span class="card-corner tl">${label}</span>
-    <span class="card-value-center">${label}</span>
-    <span class="card-corner br">${label}</span>
-  `;
-  if (!isPlayable) div.classList.add('not-playable');
-  return div;
+    const div = document.createElement('div');
+    const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
+    div.className = `card ${colorClass}`;
+    const label = getCardLabel(card);
+    div.innerHTML = `
+        <span class="card-corner tl">${label}</span>
+        <span class="card-value-center">${label}</span>
+        <span class="card-corner br">${label}</span>
+    `;
+    if (!isPlayable) div.classList.add('not-playable');
+    return div;
 }
 
 function renderTopCard(card) {
-  if (!card || !els.topCard) return;
-  const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
-  const label = getCardLabel(card);
-  els.topCard.className = `card top-card ${colorClass}`;
-  els.topCard.innerHTML = `
-    <span class="card-corner tl">${label}</span>
-    <span class="card-value-center">${label}</span>
-    <span class="card-corner br">${label}</span>
-  `;
+    if (!card || !els.topCard) return;
+    const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
+    const label = getCardLabel(card);
+    els.topCard.className = `card top-card ${colorClass}`;
+    els.topCard.innerHTML = `
+        <span class="card-corner tl">${label}</span>
+        <span class="card-value-center">${label}</span>
+        <span class="card-corner br">${label}</span>
+    `;
 }
 
 function getColorName(color) {
-  const names = { red: '🔴 Qizil', green: '🟢 Yashil', blue: '🔵 Ko\'k', yellow: '🟡 Sariq' };
-  return names[color] || color;
+    const names = { red: '🔴 Qizil', green: '🟢 Yashil', blue: '🔵 Ko\'k', yellow: '🟡 Sariq' };
+    return names[color] || color;
 }
 
 function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.appendChild(document.createTextNode(str || ''));
-  return div.innerHTML;
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str || ''));
+    return div.innerHTML;
 }
 
 function canPlayCard(card, topCard, currentColor, mustDraw, isCurrentPlayer = true) {
-  if (!card || !topCard) return false;
-  if (!isCurrentPlayer) return false;
-  if (mustDraw) return card.value === 'draw2' || card.value === 'wild4';
-  if (card.type === 'wild' || card.type === 'wild4') return true;
-  if (card.color === currentColor) return true;
-  if (card.value === topCard.value) return true;
-  return false;
+    if (!card || !topCard) return false;
+    if (!isCurrentPlayer) return false;
+    if (mustDraw) return card.value === 'draw2' || card.value === 'wild4';
+    if (card.type === 'wild' || card.type === 'wild4') return true;
+    if (card.color === currentColor) return true;
+    if (card.value === topCard.value) return true;
+    return false;
 }
 
 function renderMyHand(gs, isMyTurn) {
-  if (!els.myHand) return;
-  els.myHand.innerHTML = '';
-  const myHandData = gs.players?.find(p => p.isMe)?.hand || [];
-  
-  if (!myHandData || myHandData.length === 0) {
-    els.myHand.innerHTML = '<div class="empty-hand">Kartalar yo\'q!</div>';
-    return;
-  }
-  
-  let mappedHand = myHandData.map((card, idx) => ({ ...card, originalIndex: idx }));
-  
-  if (state.sortMethod === 'color') {
-    mappedHand.sort((a, b) => {
-      if (a.color === b.color) return (a.value || '').localeCompare(b.value || '');
-      const colorOrder = { red: 0, green: 1, blue: 2, yellow: 3, wild: 4 };
-      return (colorOrder[a.color] || 5) - (colorOrder[b.color] || 5);
-    });
-  } else if (state.sortMethod === 'value') {
-    mappedHand.sort((a, b) => {
-      const valOrder = (val) => {
-        if (val === '0') return 0;
-        if (val === '1') return 1;
-        if (val === '2') return 2;
-        if (val === '3') return 3;
-        if (val === '4') return 4;
-        if (val === '5') return 5;
-        if (val === '6') return 6;
-        if (val === '7') return 7;
-        if (val === '8') return 8;
-        if (val === '9') return 9;
-        if (val === 'skip') return 10;
-        if (val === 'reverse') return 11;
-        if (val === 'draw2') return 12;
-        if (val === 'wild') return 13;
-        if (val === 'wild4') return 14;
-        return 99;
-      };
-      return valOrder(a.value) - valOrder(b.value);
-    });
-  }
+    if (!els.myHand) return;
+    els.myHand.innerHTML = '';
+    const myHandData = gs.players?.find(p => p.isMe)?.hand || [];
 
-  mappedHand.forEach((cardObj) => {
-    const card = cardObj;
-    const index = cardObj.originalIndex;
-    const isJumpIn = (!isMyTurn && card.type !== 'wild' && card.type !== 'wild4' && 
-                      card.color === gs.topCard?.color && card.value === gs.topCard?.value && !gs.mustDraw);
-    const playable = (isMyTurn && gs.gameState === 'playing' && canPlayCard(card, gs.topCard, gs.currentColor, gs.mustDraw, isMyTurn)) || 
-                     (gs.gameState === 'playing' && isJumpIn);
+    if (!myHandData || myHandData.length === 0) {
+        els.myHand.innerHTML = '<div class="empty-hand">Kartalar yo\'q!</div>';
+        return;
+    }
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'hand-card';
-    if (!playable) {
-      wrapper.classList.add('dimmed');
-    } else {
-      wrapper.classList.add('playable');
+    let mappedHand = myHandData.map((card, idx) => ({ ...card, originalIndex: idx }));
+
+    if (state.sortMethod === 'color') {
+        mappedHand.sort((a, b) => {
+            if (a.color === b.color) return (a.value || '').localeCompare(b.value || '');
+            const colorOrder = { red: 0, green: 1, blue: 2, yellow: 3, wild: 4 };
+            return (colorOrder[a.color] || 5) - (colorOrder[b.color] || 5);
+        });
+    } else if (state.sortMethod === 'value') {
+        mappedHand.sort((a, b) => {
+            const valOrder = (val) => {
+                if (val === '0') return 0;
+                if (val === '1') return 1;
+                if (val === '2') return 2;
+                if (val === '3') return 3;
+                if (val === '4') return 4;
+                if (val === '5') return 5;
+                if (val === '6') return 6;
+                if (val === '7') return 7;
+                if (val === '8') return 8;
+                if (val === '9') return 9;
+                if (val === 'skip') return 10;
+                if (val === 'reverse') return 11;
+                if (val === 'draw2') return 12;
+                if (val === 'wild') return 13;
+                if (val === 'wild4') return 14;
+                return 99;
+            };
+            return valOrder(a.value) - valOrder(b.value);
+        });
     }
-    if (isJumpIn) wrapper.classList.add('jump-in-glow');
-    
-    const cardEl = createCardElement(card, playable);
-    wrapper.appendChild(cardEl);
-    
-    if (playable) {
-      wrapper.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onPlayCard(card, index);
-      });
+
+    mappedHand.forEach((cardObj) => {
+        const card = cardObj;
+        const index = cardObj.originalIndex;
+        const isJumpIn = (!isMyTurn && card.type !== 'wild' && card.type !== 'wild4' &&
+            card.color === gs.topCard?.color && card.value === gs.topCard?.value && !gs.mustDraw);
+        const playable = (isMyTurn && gs.gameState === 'playing' && canPlayCard(card, gs.topCard, gs.currentColor, gs.mustDraw, isMyTurn)) ||
+            (gs.gameState === 'playing' && isJumpIn);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'hand-card';
+        if (!playable) {
+            wrapper.classList.add('dimmed');
+        } else {
+            wrapper.classList.add('playable');
+        }
+        if (isJumpIn) wrapper.classList.add('jump-in-glow');
+
+        const cardEl = createCardElement(card, playable);
+        wrapper.appendChild(cardEl);
+
+        if (playable) {
+            wrapper.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onPlayCard(card, index);
+            });
+        }
+
+        els.myHand.appendChild(wrapper);
+    });
+
+    if (els.myHand.scrollWidth > els.myHand.clientWidth) {
+        els.myHand.scrollLeft = els.myHand.scrollWidth;
     }
-    
-    els.myHand.appendChild(wrapper);
-  });
-  
-  if (els.myHand.scrollWidth > els.myHand.clientWidth) {
-    els.myHand.scrollLeft = els.myHand.scrollWidth;
-  }
 }
 
 function renderOtherPlayers(gs) {
-  if (!els.otherPlayers) return;
-  els.otherPlayers.innerHTML = '';
-  const otherPlayers = gs.players?.filter(p => !p.isMe) || [];
-  
-  otherPlayers.forEach(player => {
-    const area = document.createElement('div');
-    area.className = `opponent-area ${player.isCurrentPlayer ? 'active-glow' : ''}`;
+    if (!els.otherPlayers) return;
+    els.otherPlayers.innerHTML = '';
+    const otherPlayers = gs.players?.filter(p => !p.isMe) || [];
 
-    const cardCount = Math.min(player.cardCount, 10);
-    let miniCards = '';
-    for (let i = 0; i < cardCount; i++) {
-      miniCards += `<div class="mini-card" style="z-index:${i}"></div>`;
-    }
+    otherPlayers.forEach(player => {
+        const area = document.createElement('div');
+        area.className = `opponent-area ${player.isCurrentPlayer ? 'active-glow' : ''}`;
 
-    area.innerHTML = `
-      <div class="opponent-info">
-        <div class="opponent-avatar"><img src="${player.avatar || '/avatars/default1.svg'}" width="36" height="36" style="border-radius:50%"></div>
-        <div class="opponent-name ${player.isCurrentPlayer ? 'active' : ''}">
-          ${escapeHtml(player.displayName || player.name)} ${player.isCurrentPlayer ? '▼' : ''}
-        </div>
-        ${player.isBot ? '<span class="bot-indicator">🤖 BOT</span>' : ''}
-        <div class="card-count-badge">${player.cardCount} karta</div>
-        ${player.saidUno && player.cardCount === 1 ? '<div class="uno-badge">UNO!</div>' : ''}
-      </div>
-      <div class="opponent-cards">${miniCards}</div>
-    `;
+        const cardCount = Math.min(player.cardCount, 10);
+        let miniCards = '';
+        for (let i = 0; i < cardCount; i++) {
+            miniCards += `<div class="mini-card" style="z-index:${i}"></div>`;
+        }
 
-    els.otherPlayers.appendChild(area);
-  });
+        area.innerHTML = `
+            <div class="opponent-info">
+                <div class="opponent-avatar"><img src="${player.avatar || '/avatars/default1.svg'}" width="36" height="36" style="border-radius:50%"></div>
+                <div class="opponent-name ${player.isCurrentPlayer ? 'active' : ''}">
+                    ${escapeHtml(player.displayName || player.name)} ${player.isCurrentPlayer ? '▼' : ''}
+                </div>
+                ${player.isBot ? '<span class="bot-indicator">🤖 BOT</span>' : ''}
+                <div class="card-count-badge">${player.cardCount} karta</div>
+                ${player.saidUno && player.cardCount === 1 ? '<div class="uno-badge">UNO!</div>' : ''}
+            </div>
+            <div class="opponent-cards">${miniCards}</div>
+        `;
+
+        els.otherPlayers.appendChild(area);
+    });
 }
 
 function updateGameUI(gs) {
-  if (!gs) return;
-  state.gameState = gs;
+    if (!gs) return;
+    state.gameState = gs;
 
-  const me = gs.players?.find(p => p.isMe);
-  const isMyTurn = gs.currentPlayerId === state.myId;
+    const me = gs.players?.find(p => p.isMe);
+    const isMyTurn = gs.currentPlayerId === state.myId;
 
-  if (gs.topCard) renderTopCard(gs.topCard);
+    if (gs.topCard) renderTopCard(gs.topCard);
 
-  if (els.currentColorBadge && gs.currentColor) {
-    els.currentColorBadge.className = `color-badge ${gs.currentColor}`;
-    els.currentColorBadge.textContent = getColorName(gs.currentColor);
-  }
-  if (els.deckCount) els.deckCount.textContent = gs.deckCount || 0;
+    if (els.currentColorBadge && gs.currentColor) {
+        els.currentColorBadge.className = `color-badge ${gs.currentColor}`;
+        els.currentColorBadge.textContent = getColorName(gs.currentColor);
+    }
+    if (els.deckCount) els.deckCount.textContent = gs.deckCount || 0;
 
-  const currentPlayer = gs.players?.find(p => p.isCurrentPlayer);
-  if (els.currentTurnName) {
-    els.currentTurnName.textContent = currentPlayer
-      ? (currentPlayer.isMe ? 'Siz' : (currentPlayer.displayName || currentPlayer.name))
-      : '—';
-  }
-  if (els.directionIndicator) {
-    els.directionIndicator.textContent = gs.direction === 1 ? '→' : '←';
-  }
-  
-  if (gs.gameState === 'playing' && gs.turnStartTime && gs.turnDuration) {
-    const container = document.getElementById('turn-timer-container');
-    const bar = document.getElementById('turn-timer-bar');
-    if (container && bar) {
-      container.style.display = 'block';
-      if (turnTimerInterval) clearInterval(turnTimerInterval);
-      
-      const updateTimer = () => {
-        const elapsed = Date.now() - gs.turnStartTime;
-        let remaining = gs.turnDuration - elapsed;
-        if (remaining < 0) remaining = 0;
-        
-        let percent = (remaining / gs.turnDuration) * 100;
-        bar.style.width = percent + '%';
-        
-        if (percent > 50) {
-          bar.style.background = '#2ecc71';
-        } else if (percent > 20) {
-          bar.style.background = '#f1c40f';
-        } else {
-          bar.style.background = '#e74c3c';
+    const currentPlayer = gs.players?.find(p => p.isCurrentPlayer);
+    if (els.currentTurnName) {
+        els.currentTurnName.textContent = currentPlayer
+            ? (currentPlayer.isMe ? 'Siz' : (currentPlayer.displayName || currentPlayer.name))
+            : '—';
+    }
+    if (els.directionIndicator) {
+        els.directionIndicator.textContent = gs.direction === 1 ? '→' : '←';
+    }
+
+    if (gs.gameState === 'playing' && gs.turnStartTime && gs.turnDuration) {
+        const container = document.getElementById('turn-timer-container');
+        const bar = document.getElementById('turn-timer-bar');
+        if (container && bar) {
+            container.style.display = 'block';
+            if (turnTimerInterval) clearInterval(turnTimerInterval);
+
+            const updateTimer = () => {
+                const elapsed = Date.now() - gs.turnStartTime;
+                let remaining = gs.turnDuration - elapsed;
+                if (remaining < 0) remaining = 0;
+
+                let percent = (remaining / gs.turnDuration) * 100;
+                bar.style.width = percent + '%';
+
+                if (percent > 50) {
+                    bar.style.background = '#2ecc71';
+                } else if (percent > 20) {
+                    bar.style.background = '#f1c40f';
+                } else {
+                    bar.style.background = '#e74c3c';
+                }
+            };
+
+            updateTimer();
+            turnTimerInterval = setInterval(updateTimer, 100);
         }
-      };
-      
-      updateTimer();
-      turnTimerInterval = setInterval(updateTimer, 100);
-    }
-  } else {
-    const container = document.getElementById('turn-timer-container');
-    if (container) container.style.display = 'none';
-    if (turnTimerInterval) clearInterval(turnTimerInterval);
-  }
-
-  if (me) {
-    if (els.myCardCount) els.myCardCount.textContent = `${me.cardCount} karta`;
-    if (me.cardCount === 1) {
-      if (els.myCardCount) els.myCardCount.style.background = "#ffd32a";
-      if (els.myCardCount) els.myCardCount.style.color = "#000";
     } else {
-      if (els.myCardCount) els.myCardCount.style.background = "";
-      if (els.myCardCount) els.myCardCount.style.color = "";
+        const container = document.getElementById('turn-timer-container');
+        if (container) container.style.display = 'none';
+        if (turnTimerInterval) clearInterval(turnTimerInterval);
     }
-  }
 
-  renderMyHand(gs, isMyTurn);
-  renderOtherPlayers(gs);
-
-  if (els.drawBtn) {
-    if (isMyTurn && gs.gameState === 'playing') {
-      els.drawBtn.classList.remove('disabled');
-    } else {
-      els.drawBtn.classList.add('disabled');
+    if (me) {
+        if (els.myCardCount) els.myCardCount.textContent = `${me.cardCount} karta`;
+        if (me.cardCount === 1) {
+            if (els.myCardCount) els.myCardCount.style.background = "#ffd32a";
+            if (els.myCardCount) els.myCardCount.style.color = "#000";
+        } else {
+            if (els.myCardCount) els.myCardCount.style.background = "";
+            if (els.myCardCount) els.myCardCount.style.color = "";
+        }
     }
-  }
 
-  if (els.unoBtn) {
-    els.unoBtn.style.display = (me && me.cardCount === 1 && gs.gameState === 'playing') ? 'block' : 'none';
-  }
+    renderMyHand(gs, isMyTurn);
+    renderOtherPlayers(gs);
 
-  const catchTarget = gs.players?.find(p => !p.isMe && p.cardCount === 1 && !p.saidUno);
-  if (els.catchUnoBtn) {
-    if (catchTarget && gs.gameState === 'playing') {
-      els.catchUnoBtn.style.display = 'block';
-      els.catchUnoBtn.dataset.targetId = catchTarget.id;
-    } else {
-      els.catchUnoBtn.style.display = 'none';
+    if (els.drawBtn) {
+        if (isMyTurn && gs.gameState === 'playing') {
+            els.drawBtn.classList.remove('disabled');
+        } else {
+            els.drawBtn.classList.add('disabled');
+        }
     }
-  }
 
-  if (gs.gameState === 'finished' && gs.winner) showWinModal(gs.winner);
+    if (els.unoBtn) {
+        els.unoBtn.style.display = (me && me.cardCount === 1 && gs.gameState === 'playing') ? 'block' : 'none';
+    }
+
+    const catchTarget = gs.players?.find(p => !p.isMe && p.cardCount === 1 && !p.saidUno);
+    if (els.catchUnoBtn) {
+        if (catchTarget && gs.gameState === 'playing') {
+            els.catchUnoBtn.style.display = 'block';
+            els.catchUnoBtn.dataset.targetId = catchTarget.id;
+        } else {
+            els.catchUnoBtn.style.display = 'none';
+        }
+    }
+
+    if (gs.gameState === 'finished' && gs.winner) showWinModal(gs.winner);
 }
 
 function onPlayCard(card, index) {
-  if (!socket) return;
-  if (card.type === 'wild' || card.type === 'wild4') {
-    state.pendingCard = { card, index };
-    showColorPicker();
-  } else {
-    socket.emit('playCard', { cardIndex: index });
-  }
+    if (!socket) return;
+    if (card.type === 'wild' || card.type === 'wild4') {
+        state.pendingCard = { card, index };
+        showColorPicker();
+    } else {
+        socket.emit('playCard', { cardIndex: index });
+    }
 }
 
-function showColorPicker() { 
-  if (els.colorPicker) els.colorPicker.classList.remove('hidden'); 
+function showColorPicker() {
+    if (els.colorPicker) els.colorPicker.classList.remove('hidden');
 }
 
-function hideColorPicker() { 
-  if (els.colorPicker) els.colorPicker.classList.add('hidden'); 
+function hideColorPicker() {
+    if (els.colorPicker) els.colorPicker.classList.add('hidden');
 }
 
 function showWinModal(winner) {
-  if (!els.winModal) return;
-  const isWinner = winner?.id === state.myId;
-  const winnerIsBot = winner?.id && winner.id.toString().startsWith('BOT_');
+    if (!els.winModal) return;
+    const isWinner = winner?.id === state.myId;
+    const winnerIsBot = winner?.id && winner.id.toString().startsWith('BOT_');
 
-  if (typeof confetti === 'function') {
-    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-  }
+    if (typeof confetti === 'function') {
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+    }
 
-  if (isWinner) {
-    if (els.winTitle) els.winTitle.textContent = '🎉 Siz g\'oldingiz!';
-    if (els.winMessage) els.winMessage.textContent = 'Tabriklaymiz! Zo\'r o\'yin!';
-  } else if (winnerIsBot) {
-    if (els.winTitle) els.winTitle.textContent = '🤖 Bot g\'olib bo\'ldi!';
-    if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'Bot'} sizni yutdi! Yana bir bor urinib ko\'ring!`;
-  } else {
-    if (els.winTitle) els.winTitle.textContent = `😢 ${winner?.name || 'O\'yinchi'} g\'olib!`;
-    if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'O\'yinchi'} barcha kartalarini o\'ynadi!`;
-  }
+    if (isWinner) {
+        if (els.winTitle) els.winTitle.textContent = '🎉 Siz g\'oldingiz!';
+        if (els.winMessage) els.winMessage.textContent = 'Tabriklaymiz! Zo\'r o\'yin!';
+    } else if (winnerIsBot) {
+        if (els.winTitle) els.winTitle.textContent = '🤖 Bot g\'olib bo\'ldi!';
+        if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'Bot'} sizni yutdi! Yana bir bor urinib ko\'ring!`;
+    } else {
+        if (els.winTitle) els.winTitle.textContent = `😢 ${winner?.name || 'O\'yinchi'} g\'olib!`;
+        if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'O\'yinchi'} barcha kartalarini o\'ynadi!`;
+    }
 
-  if (els.playAgainBtn) els.playAgainBtn.style.display = state.isHost ? 'block' : 'none';
-  els.winModal.classList.remove('hidden');
+    if (els.playAgainBtn) els.playAgainBtn.style.display = state.isHost ? 'block' : 'none';
+    els.winModal.classList.remove('hidden');
 }
 
 function updateWaitingRoom(gs) {
-  if (!els.waitingPlayers) return;
-  els.waitingPlayers.innerHTML = '';
+    if (!els.waitingPlayers) return;
+    els.waitingPlayers.innerHTML = '';
 
-  const capacityText = document.getElementById('waiting-capacity-text');
-  const capacityFill = document.getElementById('capacity-fill');
-  if (capacityText && capacityFill && gs) {
-    capacityText.textContent = `${gs.players?.length || 0}/${gs.maxPlayers || 8} o'yinchi`;
-    const percent = Math.min(100, ((gs.players?.length || 0) / (gs.maxPlayers || 8)) * 100);
-    capacityFill.style.width = `${percent}%`;
-  }
+    const capacityText = document.getElementById('waiting-capacity-text');
+    const capacityFill = document.getElementById('capacity-fill');
+    if (capacityText && capacityFill && gs) {
+        capacityText.textContent = `${gs.players?.length || 0}/${gs.maxPlayers || 8} o'yinchi`;
+        const percent = Math.min(100, ((gs.players?.length || 0) / (gs.maxPlayers || 8)) * 100);
+        capacityFill.style.width = `${percent}%`;
+    }
 
-  const privacyBadge = document.getElementById('room-privacy-badge');
-  if (privacyBadge && gs) {
-    if (gs.privacy === 'private') {
-      privacyBadge.className = 'privacy-badge private';
-      privacyBadge.innerHTML = '🔒 Yopiq';
+    const privacyBadge = document.getElementById('room-privacy-badge');
+    if (privacyBadge && gs) {
+        if (gs.privacy === 'private') {
+            privacyBadge.className = 'privacy-badge private';
+            privacyBadge.innerHTML = '🔒 Yopiq';
+        } else {
+            privacyBadge.className = 'privacy-badge open';
+            privacyBadge.innerHTML = '🌐 Ochiq';
+        }
+    }
+
+    const avatarColors = ['#e74c3c', '#3498db', '#27ae60', '#f39c12'];
+    const humanEmojis = ['😎', '🦊', '🐼', '🦁'];
+    const players = gs?.players || [];
+
+    players.forEach((p, i) => {
+        const div = document.createElement('div');
+        div.className = 'waiting-player';
+
+        const isMe = p.id === state.myId;
+        const canRemove = state.isHost && p.isBot && gs?.gameState === 'waiting';
+
+        div.innerHTML = `
+            <div class="player-avatar" style="background:${avatarColors[i % 4]}20;border:2px solid ${avatarColors[i % 4]}">
+                ${p.isBot ? '🤖' : humanEmojis[i % 4]}
+            </div>
+            <div class="waiting-player-info">
+                <div class="waiting-player-name">${escapeHtml(p.displayName || p.name)}</div>
+                <div class="waiting-player-role">
+                    ${isMe ? 'Sen · ' : ''}${i === 0 ? 'Host' : 'O\'yinchi'}
+                    ${p.isBot ? '<span class="bot-badge">BOT</span>' : ''}
+                </div>
+            </div>
+            ${isMe ? '<span style="color:#ffd32a;font-size:16px">★</span>' : ''}
+            ${canRemove ? `<button class="remove-bot-btn" data-bot-id="${p.id}" title="Botni o'chirish">✕</button>` : ''}
+        `;
+
+        const removeBtn = div.querySelector('.remove-bot-btn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (socket) socket.emit('removeBot', { botId: removeBtn.dataset.botId });
+            });
+        }
+
+        els.waitingPlayers.appendChild(div);
+    });
+
+    if (state.isHost) {
+        if (els.botControls) els.botControls.style.display = (players.length < (gs?.maxPlayers || 8)) ? 'flex' : 'none';
+        if (els.startGameBtn) els.startGameBtn.style.display = players.filter(p => !p.isBot).length >= 1 ? 'block' : 'none';
+        if (els.waitingMessage) {
+            els.waitingMessage.textContent = players.filter(p => !p.isBot).length < 1
+                ? 'Kamida 1 haqiqiy o\'yinchi kerak...'
+                : 'O\'yinni boshlashga tayyor!';
+        }
     } else {
-      privacyBadge.className = 'privacy-badge open';
-      privacyBadge.innerHTML = '🌐 Ochiq';
+        if (els.botControls) els.botControls.style.display = 'none';
+        if (els.startGameBtn) els.startGameBtn.style.display = 'none';
+        if (els.waitingMessage) els.waitingMessage.textContent = 'Host o\'yinni boshlashini kutmoqda...';
     }
-  }
-
-  const avatarColors = ['#e74c3c', '#3498db', '#27ae60', '#f39c12'];
-  const humanEmojis = ['😎', '🦊', '🐼', '🦁'];
-  const players = gs?.players || [];
-
-  players.forEach((p, i) => {
-    const div = document.createElement('div');
-    div.className = 'waiting-player';
-
-    const isMe = p.id === state.myId;
-    const canRemove = state.isHost && p.isBot && gs?.gameState === 'waiting';
-
-    div.innerHTML = `
-      <div class="player-avatar" style="background:${avatarColors[i % 4]}20;border:2px solid ${avatarColors[i % 4]}">
-        ${p.isBot ? '🤖' : humanEmojis[i % 4]}
-      </div>
-      <div class="waiting-player-info">
-        <div class="waiting-player-name">${escapeHtml(p.displayName || p.name)}</div>
-        <div class="waiting-player-role">
-          ${isMe ? 'Sen · ' : ''}${i === 0 ? 'Host' : 'O\'yinchi'}
-          ${p.isBot ? '<span class="bot-badge">BOT</span>' : ''}
-        </div>
-      </div>
-      ${isMe ? '<span style="color:#ffd32a;font-size:16px">★</span>' : ''}
-      ${canRemove ? `<button class="remove-bot-btn" data-bot-id="${p.id}" title="Botni o'chirish">✕</button>` : ''}
-    `;
-
-    const removeBtn = div.querySelector('.remove-bot-btn');
-    if (removeBtn) {
-      removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (socket) socket.emit('removeBot', { botId: removeBtn.dataset.botId });
-      });
-    }
-
-    els.waitingPlayers.appendChild(div);
-  });
-
-  if (state.isHost) {
-    if (els.botControls) els.botControls.style.display = (players.length < (gs?.maxPlayers || 8)) ? 'flex' : 'none';
-    if (els.startGameBtn) els.startGameBtn.style.display = players.filter(p => !p.isBot).length >= 1 ? 'block' : 'none';
-    if (els.waitingMessage) {
-      els.waitingMessage.textContent = players.filter(p => !p.isBot).length < 1
-        ? 'Kamida 1 haqiqiy o\'yinchi kerak...'
-        : 'O\'yinni boshlashga tayyor!';
-    }
-  } else {
-    if (els.botControls) els.botControls.style.display = 'none';
-    if (els.startGameBtn) els.startGameBtn.style.display = 'none';
-    if (els.waitingMessage) els.waitingMessage.textContent = 'Host o\'yinni boshlashini kutmoqda...';
-  }
 }
 
 function addChatMessage(data) {
-  if (!els.chatMessages) return;
-  const div = document.createElement('div');
+    if (!els.chatMessages) return;
+    const div = document.createElement('div');
 
-  if (data.type === 'system') {
-    div.className = 'chat-msg system';
-    div.textContent = data.message;
-    if (state.screen !== 'game') {
-      showNotif(data.message);
+    if (data.type === 'system') {
+        div.className = 'chat-msg system';
+        div.textContent = data.message;
+        if (state.screen !== 'game') {
+            showNotif(data.message);
+        }
+    } else if (data.type === 'uno') {
+        div.className = 'chat-msg uno-msg';
+        div.textContent = data.message;
+    } else {
+        const isMe = data.playerName === authState.user?.displayName;
+        div.className = `chat-msg ${isMe ? 'my-msg' : 'player-msg'}`;
+        div.innerHTML = `
+            ${!isMe ? `<div class="chat-sender">${escapeHtml(data.playerName)}</div>` : ''}
+            <div>${escapeHtml(data.message)}</div>
+        `;
     }
-  } else if (data.type === 'uno') {
-    div.className = 'chat-msg uno-msg';
-    div.textContent = data.message;
-  } else {
-    const isMe = data.playerName === authState.user?.displayName;
-    div.className = `chat-msg ${isMe ? 'my-msg' : 'player-msg'}`;
-    div.innerHTML = `
-      ${!isMe ? `<div class="chat-sender">${escapeHtml(data.playerName)}</div>` : ''}
-      <div>${escapeHtml(data.message)}</div>
-    `;
-  }
 
-  els.chatMessages.appendChild(div);
-  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    els.chatMessages.appendChild(div);
+    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
 
-  if (!state.chatOpen && state.screen === 'game') {
-    state.unreadChat++;
-    updateChatBadge();
-  }
+    if (!state.chatOpen && state.screen === 'game') {
+        state.unreadChat++;
+        updateChatBadge();
+    }
 }
 
 function updateChatBadge() {
-  if (!els.chatToggleBtn) return;
-  let badge = els.chatToggleBtn.querySelector('.chat-badge');
-  if (state.unreadChat > 0) {
-    if (!badge) {
-      badge = document.createElement('div');
-      badge.className = 'chat-badge';
-      els.chatToggleBtn.style.position = 'relative';
-      els.chatToggleBtn.appendChild(badge);
+    if (!els.chatToggleBtn) return;
+    let badge = els.chatToggleBtn.querySelector('.chat-badge');
+    if (state.unreadChat > 0) {
+        if (!badge) {
+            badge = document.createElement('div');
+            badge.className = 'chat-badge';
+            els.chatToggleBtn.style.position = 'relative';
+            els.chatToggleBtn.appendChild(badge);
+        }
+        badge.textContent = state.unreadChat > 9 ? '9+' : state.unreadChat;
+    } else if (badge) {
+        badge.remove();
     }
-    badge.textContent = state.unreadChat > 9 ? '9+' : state.unreadChat;
-  } else if (badge) {
-    badge.remove();
-  }
 }
 
 function toggleChat() {
-  state.chatOpen = !state.chatOpen;
-  if (els.chatPanel) els.chatPanel.classList.toggle('open', state.chatOpen);
-  if (state.chatOpen) {
-    state.unreadChat = 0;
-    updateChatBadge();
-    setTimeout(() => {
-      if (els.chatInput) els.chatInput.focus();
-    }, 300);
-  }
+    state.chatOpen = !state.chatOpen;
+    if (els.chatPanel) els.chatPanel.classList.toggle('open', state.chatOpen);
+    if (state.chatOpen) {
+        state.unreadChat = 0;
+        updateChatBadge();
+        setTimeout(() => {
+            if (els.chatInput) els.chatInput.focus();
+        }, 300);
+    }
 }
 
 function sendChat() {
-  const msg = els.chatInput?.value.trim();
-  if (!msg || !socket) return;
-  socket.emit('chat', { message: msg.substring(0, 200) });
-  if (els.chatInput) els.chatInput.value = '';
+    const msg = els.chatInput?.value.trim();
+    if (!msg || !socket) return;
+    socket.emit('chat', { message: msg.substring(0, 200) });
+    if (els.chatInput) els.chatInput.value = '';
 }
 
 function initSocket() {
-  if (socket) {
-    if (socketEventsSetup) {
-      socket.removeAllListeners();
-      socketEventsSetup = false;
+    if (socket) {
+        if (socketEventsSetup) {
+            socket.removeAllListeners();
+            socketEventsSetup = false;
+        }
+        socket.disconnect();
+        socket = null;
     }
-    socket.disconnect();
-    socket = null;
-  }
-  
-  socket = io({
-    transports: ['websocket'],
-    reconnection: true,
-    reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 20000
-  });
-  
-  socket.on('connect', () => {
-    console.log('Socket connected');
-    state.myId = socket.id;
-    if (authState.sessionToken) {
-      socket.emit('auth', { sessionToken: authState.sessionToken });
-    }
-    socket.emit('getRoomList');
-    hideLoading();
-  });
-  
-  socket.on('disconnect', () => {
-    console.log('Socket disconnected');
-    showError('Server bilan aloqa uzildi. Qayta ulanish...');
-  });
-  
-  socket.on('connect_error', (error) => {
-    console.error('Socket connection error:', error);
-    showError('Serverga ulanishda xatolik!');
-  });
-  
-  socket.on('authSuccess', (userData) => {
-    authState.user = userData;
-    authState.isAuthenticated = true;
-    updateProfileUI();
-    showScreen('lobby');
-    hideLoading();
-    socket.emit('getRoomList');
-  });
-  
-  socket.on('authFailed', () => {
-    logout();
-  });
-  
-  setupSocketEvents();
-  socketEventsSetup = true;
+
+    socket = io({
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
+    });
+
+    socket.on('connect', () => {
+        console.log('Socket connected');
+        state.myId = socket.id;
+        if (authState.sessionToken) {
+            socket.emit('auth', { sessionToken: authState.sessionToken });
+        }
+        socket.emit('getRoomList');
+        hideLoading();
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Socket disconnected');
+        showError('Server bilan aloqa uzildi. Qayta ulanish...');
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        showError('Serverga ulanishda xatolik!');
+    });
+
+    socket.on('authSuccess', (userData) => {
+        authState.user = userData;
+        authState.isAuthenticated = true;
+        updateProfileUI();
+        showScreen('lobby');
+        hideLoading();
+        socket.emit('getRoomList');
+    });
+
+    socket.on('authFailed', () => {
+        logout();
+    });
+
+    setupSocketEvents();
+    socketEventsSetup = true;
 }
 
 function setupSocketEvents() {
-  if (!socket) return;
-  
-  socket.on('roomCreated', ({ roomId }) => {
-    state.roomId = roomId;
-    state.isHost = true;
-    if (els.roomCodeDisplay) els.roomCodeDisplay.textContent = roomId;
-    showScreen('waiting');
-    hideLoading();
-  });
+    if (!socket) return;
 
-  socket.on('gameUpdate', (gs) => {
-    if (!gs) return;
-    if (state.screen === 'waiting') {
-      updateWaitingRoom(gs);
-    } else if (state.screen === 'game') {
-      updateGameUI(gs);
-    }
-    if (gs.gameState === 'waiting' && state.roomId && state.screen === 'lobby') {
-      showScreen('waiting');
-      updateWaitingRoom(gs);
-    }
-    hideLoading();
-  });
-
-  socket.on('gameStarted', () => {
-    showScreen('game');
-    hideLoading();
-  });
-
-  socket.on('roomListUpdate', (rooms) => {
-    if (state.screen !== 'lobby' || !els.roomsList) return;
-    els.roomsList.innerHTML = '';
-    if (!rooms || rooms.length === 0) {
-      els.roomsList.innerHTML = '<div class="no-rooms">Hozircha xona yo\'q</div>';
-      return;
-    }
-    rooms.forEach(room => {
-      const div = document.createElement('div');
-      div.className = 'room-item';
-      div.innerHTML = `
-        <div>
-          <div class="room-item-info">${escapeHtml(room.id)}</div>
-          <div class="room-item-count">Host: ${escapeHtml(room.host)} · ${room.playerCount}/${room.maxPlayers}</div>
-        </div>
-        <button class="join-btn-small" data-room="${room.id}">Qo'shilish</button>
-      `;
-      const joinBtn = div.querySelector('.join-btn-small');
-      joinBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        joinRoom(room.id);
-      });
-      els.roomsList.appendChild(div);
+    socket.on('roomCreated', ({ roomId }) => {
+        state.roomId = roomId;
+        state.isHost = true;
+        if (els.roomCodeDisplay) els.roomCodeDisplay.textContent = roomId;
+        showScreen('waiting');
+        hideLoading();
     });
-  });
 
-  socket.on('chatMessage', data => addChatMessage(data));
+    socket.on('gameUpdate', (gs) => {
+        if (!gs) return;
+        if (state.screen === 'waiting') {
+            updateWaitingRoom(gs);
+        } else if (state.screen === 'game') {
+            updateGameUI(gs);
+        }
+        if (gs.gameState === 'waiting' && state.roomId && state.screen === 'lobby') {
+            showScreen('waiting');
+            updateWaitingRoom(gs);
+        }
+        hideLoading();
+    });
 
-  socket.on('cardPlayed', ({ playerName, card, botDrew }) => {
-    if (playerName !== authState.user?.displayName) {
-      if (botDrew) {
-        showNotif(`🤖 ${playerName} karta oldi`);
-      } else if (card) {
-        const label = getCardLabel(card);
-        showNotif(`${playerName}: ${label}`);
-      }
-    }
-  });
+    socket.on('gameStarted', () => {
+        showScreen('game');
+        hideLoading();
+    });
 
-  socket.on('error', ({ message }) => showError(message));
-  
-  socket.on('reaction', ({ playerId, emoji }) => {
-    showFloatingReaction(playerId, emoji);
-  });
-  
-  socket.on('onlineCount', (count) => {
-    const onlineEl = document.getElementById('online-count');
-    if (onlineEl) onlineEl.textContent = count;
-  });
+    socket.on('roomListUpdate', (rooms) => {
+        if (state.screen !== 'lobby' || !els.roomsList) return;
+        els.roomsList.innerHTML = '';
+        if (!rooms || rooms.length === 0) {
+            els.roomsList.innerHTML = '<div class="no-rooms">Hozircha xona yo\'q</div>';
+            return;
+        }
+        rooms.forEach(room => {
+            const div = document.createElement('div');
+            div.className = 'room-item';
+            div.innerHTML = `
+                <div>
+                    <div class="room-item-info">${escapeHtml(room.id)}</div>
+                    <div class="room-item-count">Host: ${escapeHtml(room.host)} · ${room.playerCount}/${room.maxPlayers}</div>
+                </div>
+                <button class="join-btn-small" data-room="${room.id}">Qo'shilish</button>
+            `;
+            const joinBtn = div.querySelector('.join-btn-small');
+            joinBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                joinRoom(room.id);
+            });
+            els.roomsList.appendChild(div);
+        });
+    });
+
+    socket.on('chatMessage', data => addChatMessage(data));
+
+    socket.on('cardPlayed', ({ playerName, card, botDrew }) => {
+        if (playerName !== authState.user?.displayName) {
+            if (botDrew) {
+                showNotif(`🤖 ${playerName} karta oldi`);
+            } else if (card) {
+                const label = getCardLabel(card);
+                showNotif(`${playerName}: ${label}`);
+            }
+        }
+    });
+
+    socket.on('error', ({ message }) => showError(message));
+
+    socket.on('reaction', ({ playerId, emoji }) => {
+        showFloatingReaction(playerId, emoji);
+    });
+
+    socket.on('onlineCount', (count) => {
+        const onlineEl = document.getElementById('online-count');
+        if (onlineEl) onlineEl.textContent = count;
+    });
 }
 
 async function register() {
-  const username = els.registerUsername?.value.trim();
-  const password = els.registerPassword?.value;
-  const displayName = els.registerDisplayName?.value.trim();
-  const avatar = els.registerAvatar?.value || null;
-  
-  if (!username || !password || !displayName) {
-    showAuthError('Barcha maydonlarni to\'ldiring!');
-    return;
-  }
-  
-  if (username.length < 3 || username.length > 20) {
-    showAuthError('Username 3-20 belgi orasida bo\'lishi kerak!');
-    return;
-  }
-  
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-    showAuthError('Username faqat harf, raqam va _ dan iborat bo\'lishi kerak!');
-    return;
-  }
-  
-  if (password.length < 4) {
-    showAuthError('Parol kamida 4 belgi bo\'lishi kerak!');
-    return;
-  }
-  
-  showLoading('Ro\'yxatdan o\'tkazilmoqda...');
-  
-  try {
-    const response = await fetch('/api/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, displayName, avatar })
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      authState.sessionToken = data.sessionToken;
-      authState.user = data.user;
-      authState.isAuthenticated = true;
-      localStorage.setItem('uno_session', data.sessionToken);
-      updateProfileUI();
-      initSocket();
-      showScreen('lobby');
-      hideLoading();
-    } else {
-      showAuthError(data.error || 'Ro\'yxatdan o\'tishda xatolik!');
-      hideLoading();
+    const username = els.registerUsername?.value.trim();
+    const password = els.registerPassword?.value;
+    const displayName = els.registerDisplayName?.value.trim();
+    const avatar = els.registerAvatar?.value || null;
+
+    if (!username || !password || !displayName) {
+        showAuthError('Barcha maydonlarni to\'ldiring!');
+        return;
     }
-  } catch (error) {
-    console.error('Register error:', error);
-    showAuthError('Server bilan bog\'lanishda xatolik!');
-    hideLoading();
-  }
+
+    if (username.length < 3 || username.length > 20) {
+        showAuthError('Username 3-20 belgi orasida bo\'lishi kerak!');
+        return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        showAuthError('Username faqat harf, raqam va _ dan iborat bo\'lishi kerak!');
+        return;
+    }
+
+    if (password.length < 4) {
+        showAuthError('Parol kamida 4 belgi bo\'lishi kerak!');
+        return;
+    }
+
+    showLoading('Ro\'yxatdan o\'tkazilmoqda...');
+
+    try {
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, displayName, avatar })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            authState.sessionToken = data.sessionToken;
+            authState.user = data.user;
+            authState.isAuthenticated = true;
+            localStorage.setItem('uno_session', data.sessionToken);
+            updateProfileUI();
+            initSocket();
+            showScreen('lobby');
+            hideLoading();
+        } else {
+            showAuthError(data.error || 'Ro\'yxatdan o\'tishda xatolik!');
+            hideLoading();
+        }
+    } catch (error) {
+        console.error('Register error:', error);
+        showAuthError('Server bilan bog\'lanishda xatolik!');
+        hideLoading();
+    }
 }
 
 async function login() {
-  const username = els.loginUsername?.value.trim();
-  const password = els.loginPassword?.value;
-  
-  if (!username || !password) {
-    showAuthError('Username va parolni kiriting!');
-    return;
-  }
-  
-  showLoading('Tizimga kirilmoqda...');
-  
-  try {
-    const response = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      authState.sessionToken = data.sessionToken;
-      authState.user = data.user;
-      authState.isAuthenticated = true;
-      localStorage.setItem('uno_session', data.sessionToken);
-      updateProfileUI();
-      initSocket();
-      showScreen('lobby');
-      hideLoading();
-    } else {
-      showAuthError(data.error || 'Login yoki parol noto\'g\'ri!');
-      hideLoading();
+    const username = els.loginUsername?.value.trim();
+    const password = els.loginPassword?.value;
+
+    if (!username || !password) {
+        showAuthError('Username va parolni kiriting!');
+        return;
     }
-  } catch (error) {
-    console.error('Login error:', error);
-    showAuthError('Server bilan bog\'lanishda xatolik!');
-    hideLoading();
-  }
+
+    showLoading('Tizimga kirilmoqda...');
+
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            authState.sessionToken = data.sessionToken;
+            authState.user = data.user;
+            authState.isAuthenticated = true;
+            localStorage.setItem('uno_session', data.sessionToken);
+            updateProfileUI();
+            initSocket();
+            showScreen('lobby');
+            hideLoading();
+        } else {
+            showAuthError(data.error || 'Login yoki parol noto\'g\'ri!');
+            hideLoading();
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        showAuthError('Server bilan bog\'lanishda xatolik!');
+        hideLoading();
+    }
 }
 
 function logout() {
-  if (authState.sessionToken) {
-    fetch('/api/logout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionToken: authState.sessionToken })
-    }).catch(console.error);
-  }
-  
-  authState.isAuthenticated = false;
-  authState.sessionToken = null;
-  authState.user = null;
-  localStorage.removeItem('uno_session');
-  
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-    socketEventsSetup = false;
-  }
-  
-  showScreen('auth');
-  clearAuthForm();
+    if (authState.sessionToken) {
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionToken: authState.sessionToken })
+        }).catch(console.error);
+    }
+
+    authState.isAuthenticated = false;
+    authState.sessionToken = null;
+    authState.user = null;
+    localStorage.removeItem('uno_session');
+
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+        socketEventsSetup = false;
+    }
+
+    showScreen('auth');
+    clearAuthForm();
 }
 
 function showAuthError(message) {
-  if (els.authError) {
-    els.authError.textContent = message;
-    els.authError.classList.remove('hidden');
-    setTimeout(() => {
-      if (els.authError) els.authError.classList.add('hidden');
-    }, 3000);
-  }
+    if (els.authError) {
+        els.authError.textContent = message;
+        els.authError.classList.remove('hidden');
+        setTimeout(() => {
+            if (els.authError) els.authError.classList.add('hidden');
+        }, 3000);
+    }
 }
 
 function clearAuthForm() {
-  if (els.loginUsername) els.loginUsername.value = '';
-  if (els.loginPassword) els.loginPassword.value = '';
-  if (els.registerUsername) els.registerUsername.value = '';
-  if (els.registerPassword) els.registerPassword.value = '';
-  if (els.registerDisplayName) els.registerDisplayName.value = '';
-  if (els.registerAvatar) els.registerAvatar.value = '';
+    if (els.loginUsername) els.loginUsername.value = '';
+    if (els.loginPassword) els.loginPassword.value = '';
+    if (els.registerUsername) els.registerUsername.value = '';
+    if (els.registerPassword) els.registerPassword.value = '';
+    if (els.registerDisplayName) els.registerDisplayName.value = '';
+    if (els.registerAvatar) els.registerAvatar.value = '';
 }
 
 function updateProfileUI() {
-  if (authState.user) {
-    if (els.playerNameDisplay) els.playerNameDisplay.textContent = authState.user.displayName;
-    if (els.playerAvatar) els.playerAvatar.src = authState.user.avatar || '/avatars/default1.svg';
-    if (els.myNameDisplay) els.myNameDisplay.textContent = authState.user.displayName;
-    if (els.myAvatar) els.myAvatar.src = authState.user.avatar || '/avatars/default1.svg';
-    if (els.profileUsername) els.profileUsername.textContent = authState.user.username;
-    if (els.profileDisplayName) els.profileDisplayName.textContent = authState.user.displayName;
-    if (els.profileAvatar) els.profileAvatar.src = authState.user.avatar || '/avatars/default1.svg';
-    if (els.profileWins) els.profileWins.textContent = authState.user.stats?.wins || 0;
-    if (els.profileGames) els.profileGames.textContent = authState.user.stats?.gamesPlayed || 0;
-  }
+    if (authState.user) {
+        if (els.playerNameDisplay) els.playerNameDisplay.textContent = authState.user.displayName;
+        if (els.playerAvatar) els.playerAvatar.src = authState.user.avatar || '/avatars/default1.svg';
+        if (els.myNameDisplay) els.myNameDisplay.textContent = authState.user.displayName;
+        if (els.myAvatar) els.myAvatar.src = authState.user.avatar || '/avatars/default1.svg';
+        if (els.profileUsername) els.profileUsername.textContent = authState.user.username;
+        if (els.profileDisplayName) els.profileDisplayName.textContent = authState.user.displayName;
+        if (els.profileAvatar) els.profileAvatar.src = authState.user.avatar || '/avatars/default1.svg';
+        if (els.profileWins) els.profileWins.textContent = authState.user.stats?.wins || 0;
+        if (els.profileGames) els.profileGames.textContent = authState.user.stats?.gamesPlayed || 0;
+    }
 }
 
 function toggleProfile() {
-  if (els.profileSidebar) {
-    els.profileSidebar.classList.toggle('open');
-  }
+    if (els.profileSidebar) {
+        els.profileSidebar.classList.toggle('open');
+    }
 }
 
 async function saveProfile() {
-  const displayName = els.editDisplayName?.value.trim();
-  const avatar = els.editAvatar?.value;
-  
-  if (!displayName) {
-    showError('Ko\'rsatiladigan ism bo\'sh bo\'lishi mumkin emas!');
-    return;
-  }
-  
-  showLoading('Profilyangiz saqlanmoqda...');
-  
-  try {
-    const response = await fetch('/api/update-profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionToken: authState.sessionToken,
-        displayName,
-        avatar: avatar || authState.user.avatar
-      })
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      authState.user = data.user;
-      updateProfileUI();
-      if (els.profileEditSection) els.profileEditSection.style.display = 'none';
-      showNotif('Profil muvaffaqiyatli yangilandi!');
-      hideLoading();
-    } else {
-      showError(data.error || 'Profilni yangilashda xatolik!');
-      hideLoading();
+    const displayName = els.editDisplayName?.value.trim();
+    const avatar = els.editAvatar?.value;
+
+    if (!displayName) {
+        showError('Ko\'rsatiladigan ism bo\'sh bo\'lishi mumkin emas!');
+        return;
     }
-  } catch (error) {
-    console.error('Profile update error:', error);
-    showError('Server bilan bog\'lanishda xatolik!');
-    hideLoading();
-  }
+
+    showLoading('Profilyangiz saqlanmoqda...');
+
+    try {
+        const response = await fetch('/api/update-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionToken: authState.sessionToken,
+                displayName,
+                avatar: avatar || authState.user.avatar
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            authState.user = data.user;
+            updateProfileUI();
+            if (els.profileEditSection) els.profileEditSection.style.display = 'none';
+            showNotif('Profil muvaffaqiyatli yangilandi!');
+            hideLoading();
+        } else {
+            showError(data.error || 'Profilni yangilashda xatolik!');
+            hideLoading();
+        }
+    } catch (error) {
+        console.error('Profile update error:', error);
+        showError('Server bilan bog\'lanishda xatolik!');
+        hideLoading();
+    }
 }
 
 let isJoining = false;
 
 function joinRoom(roomId) {
-  if (isJoining) {
-    showNotif('Iltimos kuting, xonaga qo\'shilmoqda...');
-    return;
-  }
-  
-  if (!authState.isAuthenticated) {
-    showError('Avval tizimga kiring!');
-    return;
-  }
-  
-  if (!socket || !socket.connected) {
-    showError('Serverga ulanish yo\'q!');
-    return;
-  }
-  
-  isJoining = true;
-  showLoading('Xonaga qo\'shilmoqda...');
-  
-  socket.emit('joinRoom', { roomId });
-  
-  setTimeout(() => {
-    isJoining = false;
-  }, 5000);
+    if (isJoining) {
+        showNotif('Iltimos kuting, xonaga qo\'shilmoqda...');
+        return;
+    }
+
+    if (!authState.isAuthenticated) {
+        showError('Avval tizimga kiring!');
+        return;
+    }
+
+    if (!socket || !socket.connected) {
+        showError('Serverga ulanish yo\'q!');
+        return;
+    }
+
+    isJoining = true;
+    showLoading('Xonaga qo\'shilmoqda...');
+
+    socket.emit('joinRoom', { roomId });
+
+    setTimeout(() => {
+        isJoining = false;
+    }, 5000);
 }
 
 function createRoom() {
-  if (!authState.isAuthenticated) {
-    showError('Avval tizimga kiring!');
-    return;
-  }
-  
-  const modal = document.getElementById('create-room-modal');
-  if (modal) modal.classList.remove('hidden');
+    if (!authState.isAuthenticated) {
+        showError('Avval tizimga kiring!');
+        return;
+    }
+
+    const modal = document.getElementById('create-room-modal');
+    if (modal) modal.classList.remove('hidden');
 }
 
 function confirmCreateRoom() {
-  const activeBtn = document.querySelector('.room-type-btn.active');
-  const selectedPrivacy = activeBtn?.dataset.type || 'open';
-  const maxPlayersDisplay = document.getElementById('max-players-display');
-  const maxPlayers = parseInt(maxPlayersDisplay?.textContent || '8');
-  
-  showLoading('Xona yaratilmoqda...');
-  if (socket) {
-    socket.emit('createRoom', { privacy: selectedPrivacy, maxPlayers });
-  }
-  
-  const modal = document.getElementById('create-room-modal');
-  if (modal) modal.classList.add('hidden');
+    const activeBtn = document.querySelector('.room-type-btn.active');
+    const selectedPrivacy = activeBtn?.dataset.type || 'open';
+    const maxPlayersDisplay = document.getElementById('max-players-display');
+    const maxPlayers = parseInt(maxPlayersDisplay?.textContent || '8');
+
+    showLoading('Xona yaratilmoqda...');
+    if (socket) {
+        socket.emit('createRoom', { privacy: selectedPrivacy, maxPlayers });
+    }
+
+    const modal = document.getElementById('create-room-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
 function showFloatingReaction(playerId, emoji) {
-  const el = document.createElement('div');
-  el.className = 'floating-reaction';
-  el.textContent = emoji;
-  
-  if (playerId === state.myId) {
-    const rect = document.querySelector('.player-area')?.getBoundingClientRect();
-    if (rect) {
-      el.style.left = (rect.left + rect.width / 2 - 16) + 'px';
-      el.style.top = (rect.top - 20) + 'px';
+    const el = document.createElement('div');
+    el.className = 'floating-reaction';
+    el.textContent = emoji;
+
+    if (playerId === state.myId) {
+        const rect = document.querySelector('.player-area')?.getBoundingClientRect();
+        if (rect) {
+            el.style.left = (rect.left + rect.width / 2 - 16) + 'px';
+            el.style.top = (rect.top - 20) + 'px';
+        }
+    } else {
+        el.style.left = (Math.random() * 60 + 20) + '%';
+        el.style.top = '150px';
     }
-  } else {
-    el.style.left = (Math.random() * 60 + 20) + '%';
-    el.style.top = '150px';
-  }
-  
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2000);
+
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2000);
 }
 
 let eventListenersInitialized = false;
 
 function initEventListeners() {
-  if (eventListenersInitialized) return;
-  eventListenersInitialized = true;
-  
-  if (els.loginTab) {
-    els.loginTab.addEventListener('click', () => {
-      els.loginTab.classList.add('active');
-      if (els.registerTab) els.registerTab.classList.remove('active');
-      if (els.loginForm) els.loginForm.style.display = 'block';
-      if (els.registerForm) els.registerForm.style.display = 'none';
+    if (eventListenersInitialized) return;
+    eventListenersInitialized = true;
+
+    if (els.loginTab) {
+        els.loginTab.addEventListener('click', () => {
+            els.loginTab.classList.add('active');
+            if (els.registerTab) els.registerTab.classList.remove('active');
+            if (els.loginForm) els.loginForm.style.display = 'block';
+            if (els.registerForm) els.registerForm.style.display = 'none';
+        });
+    }
+
+    if (els.registerTab) {
+        els.registerTab.addEventListener('click', () => {
+            els.registerTab.classList.add('active');
+            if (els.loginTab) els.loginTab.classList.remove('active');
+            if (els.loginForm) els.loginForm.style.display = 'none';
+            if (els.registerForm) els.registerForm.style.display = 'block';
+        });
+    }
+
+    if (els.loginBtn) els.loginBtn.addEventListener('click', login);
+    if (els.registerBtn) els.registerBtn.addEventListener('click', register);
+    if (els.logoutBtn) els.logoutBtn.addEventListener('click', logout);
+    if (els.profileToggle) els.profileToggle.addEventListener('click', toggleProfile);
+    if (els.closeProfileBtn) els.closeProfileBtn.addEventListener('click', toggleProfile);
+
+    if (els.editProfileBtn) {
+        els.editProfileBtn.addEventListener('click', () => {
+            if (els.profileEditSection) {
+                els.profileEditSection.style.display = 'block';
+                if (els.editDisplayName) els.editDisplayName.value = authState.user?.displayName || '';
+                if (els.editAvatar) els.editAvatar.value = authState.user?.avatar || '';
+            }
+        });
+    }
+
+    if (els.saveProfileBtn) els.saveProfileBtn.addEventListener('click', saveProfile);
+    if (els.createRoomBtn) els.createRoomBtn.addEventListener('click', createRoom);
+
+    if (els.joinRoomBtn) {
+        els.joinRoomBtn.addEventListener('click', () => {
+            const code = els.roomCode?.value.trim().toUpperCase();
+            if (code) joinRoom(code);
+            else showError('Xona kodini kiriting!');
+        });
+    }
+
+    if (els.refreshRoomsBtn) {
+        els.refreshRoomsBtn.addEventListener('click', () => {
+            if (socket) socket.emit('getRoomList');
+        });
+    }
+
+    if (els.startGameBtn) {
+        els.startGameBtn.addEventListener('click', () => {
+            if (socket) socket.emit('startGame');
+        });
+    }
+
+    if (els.leaveRoomBtn) els.leaveRoomBtn.addEventListener('click', () => location.reload());
+
+    if (els.copyCodeBtn) {
+        els.copyCodeBtn.addEventListener('click', () => {
+            const code = els.roomCodeDisplay?.textContent;
+            if (code) {
+                navigator.clipboard.writeText(code)
+                    .then(() => showNotif('📋 Kod nusxa olindi!'))
+                    .catch(() => showNotif(`Kod: ${code}`));
+            }
+        });
+    }
+
+    if (els.addBotBtn) {
+        els.addBotBtn.addEventListener('click', () => {
+            const difficulty = els.botDifficulty?.value || 'medium';
+            if (socket) socket.emit('addBot', { difficulty });
+        });
+    }
+
+    if (els.drawBtn) {
+        els.drawBtn.addEventListener('click', () => {
+            if (!els.drawBtn.classList.contains('disabled') && socket) {
+                socket.emit('drawCard');
+            }
+        });
+    }
+
+    if (els.unoBtn) {
+        els.unoBtn.addEventListener('click', () => {
+            if (socket) {
+                socket.emit('sayUno');
+                showNotif('🎴 UNO!');
+            }
+        });
+    }
+
+    if (els.catchUnoBtn) {
+        els.catchUnoBtn.addEventListener('click', () => {
+            const targetId = els.catchUnoBtn.dataset.targetId;
+            if (targetId && socket) socket.emit('catchUno', { targetId });
+        });
+    }
+
+    if (els.chatToggleBtn) els.chatToggleBtn.addEventListener('click', toggleChat);
+    if (els.toggleChatBtn) els.toggleChatBtn.addEventListener('click', toggleChat);
+    if (els.sendChatBtn) els.sendChatBtn.addEventListener('click', sendChat);
+
+    if (els.chatInput) {
+        els.chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+    }
+
+    if (els.sortColorBtn) {
+        els.sortColorBtn.addEventListener('click', () => {
+            state.sortMethod = state.sortMethod === 'color' ? 'none' : 'color';
+            if (state.gameState) updateGameUI(state.gameState);
+        });
+    }
+
+    if (els.sortValueBtn) {
+        els.sortValueBtn.addEventListener('click', () => {
+            state.sortMethod = state.sortMethod === 'value' ? 'none' : 'value';
+            if (state.gameState) updateGameUI(state.gameState);
+        });
+    }
+
+    document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (state.pendingCard && socket) {
+                socket.emit('playCard', { cardIndex: state.pendingCard.index, chosenColor: btn.dataset.color });
+                state.pendingCard = null;
+            }
+            hideColorPicker();
+        });
     });
-  }
-  
-  if (els.registerTab) {
-    els.registerTab.addEventListener('click', () => {
-      els.registerTab.classList.add('active');
-      if (els.loginTab) els.loginTab.classList.remove('active');
-      if (els.loginForm) els.loginForm.style.display = 'none';
-      if (els.registerForm) els.registerForm.style.display = 'block';
+
+    document.querySelectorAll('.btn-reaction').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (socket) socket.emit('reaction', { emoji: btn.dataset.emoji });
+        });
     });
-  }
-  
-  if (els.loginBtn) els.loginBtn.addEventListener('click', login);
-  if (els.registerBtn) els.registerBtn.addEventListener('click', register);
-  if (els.logoutBtn) els.logoutBtn.addEventListener('click', logout);
-  if (els.profileToggle) els.profileToggle.addEventListener('click', toggleProfile);
-  if (els.closeProfileBtn) els.closeProfileBtn.addEventListener('click', toggleProfile);
-  
-  if (els.editProfileBtn) {
-    els.editProfileBtn.addEventListener('click', () => {
-      if (els.profileEditSection) {
-        els.profileEditSection.style.display = 'block';
-        if (els.editDisplayName) els.editDisplayName.value = authState.user?.displayName || '';
-        if (els.editAvatar) els.editAvatar.value = authState.user?.avatar || '';
-      }
-    });
-  }
-  
-  if (els.saveProfileBtn) els.saveProfileBtn.addEventListener('click', saveProfile);
-  if (els.createRoomBtn) els.createRoomBtn.addEventListener('click', createRoom);
-  
-  if (els.joinRoomBtn) {
-    els.joinRoomBtn.addEventListener('click', () => {
-      const code = els.roomCode?.value.trim().toUpperCase();
-      if (code) joinRoom(code);
-      else showError('Xona kodini kiriting!');
-    });
-  }
-  
-  if (els.refreshRoomsBtn) {
-    els.refreshRoomsBtn.addEventListener('click', () => {
-      if (socket) socket.emit('getRoomList');
-    });
-  }
-  
-  if (els.startGameBtn) {
-    els.startGameBtn.addEventListener('click', () => {
-      if (socket) socket.emit('startGame');
-    });
-  }
-  
-  if (els.leaveRoomBtn) els.leaveRoomBtn.addEventListener('click', () => location.reload());
-  
-  if (els.copyCodeBtn) {
-    els.copyCodeBtn.addEventListener('click', () => {
-      const code = els.roomCodeDisplay?.textContent;
-      if (code) {
-        navigator.clipboard.writeText(code)
-          .then(() => showNotif('📋 Kod nusxa olindi!'))
-          .catch(() => showNotif(`Kod: ${code}`));
-      }
-    });
-  }
-  
-  if (els.addBotBtn) {
-    els.addBotBtn.addEventListener('click', () => {
-      const difficulty = els.botDifficulty?.value || 'medium';
-      if (socket) socket.emit('addBot', { difficulty });
-    });
-  }
-  
-  if (els.drawBtn) {
-    els.drawBtn.addEventListener('click', () => {
-      if (!els.drawBtn.classList.contains('disabled') && socket) {
-        socket.emit('drawCard');
-      }
-    });
-  }
-  
-  if (els.unoBtn) {
-    els.unoBtn.addEventListener('click', () => {
-      if (socket) {
-        socket.emit('sayUno');
-        showNotif('🎴 UNO!');
-      }
-    });
-  }
-  
-  if (els.catchUnoBtn) {
-    els.catchUnoBtn.addEventListener('click', () => {
-      const targetId = els.catchUnoBtn.dataset.targetId;
-      if (targetId && socket) socket.emit('catchUno', { targetId });
-    });
-  }
-  
-  if (els.chatToggleBtn) els.chatToggleBtn.addEventListener('click', toggleChat);
-  if (els.toggleChatBtn) els.toggleChatBtn.addEventListener('click', toggleChat);
-  if (els.sendChatBtn) els.sendChatBtn.addEventListener('click', sendChat);
-  
-  if (els.chatInput) {
-    els.chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
-  }
-  
-  if (els.sortColorBtn) {
-    els.sortColorBtn.addEventListener('click', () => {
-      state.sortMethod = state.sortMethod === 'color' ? 'none' : 'color';
-      if (state.gameState) updateGameUI(state.gameState);
-    });
-  }
-  
-  if (els.sortValueBtn) {
-    els.sortValueBtn.addEventListener('click', () => {
-      state.sortMethod = state.sortMethod === 'value' ? 'none' : 'value';
-      if (state.gameState) updateGameUI(state.gameState);
-    });
-  }
-  
-  document.querySelectorAll('.color-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (state.pendingCard && socket) {
-        socket.emit('playCard', { cardIndex: state.pendingCard.index, chosenColor: btn.dataset.color });
-        state.pendingCard = null;
-      }
-      hideColorPicker();
-    });
-  });
-  
-  document.querySelectorAll('.btn-reaction').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (socket) socket.emit('reaction', { emoji: btn.dataset.emoji });
-    });
-  });
-  
-  if (els.playAgainBtn) {
-    els.playAgainBtn.addEventListener('click', () => {
-      if (socket) socket.emit('startGame');
-      if (els.winModal) els.winModal.classList.add('hidden');
-    });
-  }
-  
-  if (els.goLobbyBtn) {
-    els.goLobbyBtn.addEventListener('click', () => location.reload());
-  }
-  
-  const cancelCreateBtn = document.getElementById('cancel-create-btn');
-  if (cancelCreateBtn) {
-    cancelCreateBtn.addEventListener('click', () => {
-      const modal = document.getElementById('create-room-modal');
-      if (modal) modal.classList.add('hidden');
-    });
-  }
-  
-  const typeOpen = document.getElementById('type-open');
-  const typePrivate = document.getElementById('type-private');
-  const checkOpen = document.getElementById('check-open');
-  const checkPrivate = document.getElementById('check-private');
-  const countMinus = document.getElementById('count-minus');
-  const countPlus = document.getElementById('count-plus');
-  const maxPlayersDisplay = document.getElementById('max-players-display');
-  const confirmCreateBtn = document.getElementById('confirm-create-btn');
-  
-  if (typeOpen) {
-    typeOpen.addEventListener('click', () => {
-      typeOpen.classList.add('active');
-      if (typePrivate) typePrivate.classList.remove('active');
-      if (checkOpen) checkOpen.classList.remove('hidden');
-      if (checkPrivate) checkPrivate.classList.add('hidden');
-    });
-  }
-  
-  if (typePrivate) {
-    typePrivate.addEventListener('click', () => {
-      typePrivate.classList.add('active');
-      if (typeOpen) typeOpen.classList.remove('active');
-      if (checkPrivate) checkPrivate.classList.remove('hidden');
-      if (checkOpen) checkOpen.classList.add('hidden');
-    });
-  }
-  
-  if (countMinus && maxPlayersDisplay) {
-    countMinus.addEventListener('click', () => {
-      let val = parseInt(maxPlayersDisplay.textContent);
-      if (val > 2) {
-        val--;
-        maxPlayersDisplay.textContent = val;
-      }
-    });
-  }
-  
-  if (countPlus && maxPlayersDisplay) {
-    countPlus.addEventListener('click', () => {
-      let val = parseInt(maxPlayersDisplay.textContent);
-      if (val < 8) {
-        val++;
-        maxPlayersDisplay.textContent = val;
-      }
-    });
-  }
-  
-  if (confirmCreateBtn) {
-    confirmCreateBtn.addEventListener('click', confirmCreateRoom);
-  }
-  
-  const colorPickerBackdrop = document.querySelector('#color-picker .modal-backdrop');
-  if (colorPickerBackdrop) {
-    colorPickerBackdrop.addEventListener('click', hideColorPicker);
-  }
+
+    if (els.playAgainBtn) {
+        els.playAgainBtn.addEventListener('click', () => {
+            if (socket) socket.emit('startGame');
+            if (els.winModal) els.winModal.classList.add('hidden');
+        });
+    }
+
+    if (els.goLobbyBtn) {
+        els.goLobbyBtn.addEventListener('click', () => location.reload());
+    }
+
+    const cancelCreateBtn = document.getElementById('cancel-create-btn');
+    if (cancelCreateBtn) {
+        cancelCreateBtn.addEventListener('click', () => {
+            const modal = document.getElementById('create-room-modal');
+            if (modal) modal.classList.add('hidden');
+        });
+    }
+
+    const typeOpen = document.getElementById('type-open');
+    const typePrivate = document.getElementById('type-private');
+    const checkOpen = document.getElementById('check-open');
+    const checkPrivate = document.getElementById('check-private');
+    const countMinus = document.getElementById('count-minus');
+    const countPlus = document.getElementById('count-plus');
+    const maxPlayersDisplay = document.getElementById('max-players-display');
+    const confirmCreateBtn = document.getElementById('confirm-create-btn');
+
+    if (typeOpen) {
+        typeOpen.addEventListener('click', () => {
+            typeOpen.classList.add('active');
+            if (typePrivate) typePrivate.classList.remove('active');
+            if (checkOpen) checkOpen.classList.remove('hidden');
+            if (checkPrivate) checkPrivate.classList.add('hidden');
+        });
+    }
+
+    if (typePrivate) {
+        typePrivate.addEventListener('click', () => {
+            typePrivate.classList.add('active');
+            if (typeOpen) typeOpen.classList.remove('active');
+            if (checkPrivate) checkPrivate.classList.remove('hidden');
+            if (checkOpen) checkOpen.classList.add('hidden');
+        });
+    }
+
+    if (countMinus && maxPlayersDisplay) {
+        countMinus.addEventListener('click', () => {
+            let val = parseInt(maxPlayersDisplay.textContent);
+            if (val > 2) {
+                val--;
+                maxPlayersDisplay.textContent = val;
+            }
+        });
+    }
+
+    if (countPlus && maxPlayersDisplay) {
+        countPlus.addEventListener('click', () => {
+            let val = parseInt(maxPlayersDisplay.textContent);
+            if (val < 8) {
+                val++;
+                maxPlayersDisplay.textContent = val;
+            }
+        });
+    }
+
+    if (confirmCreateBtn) {
+        confirmCreateBtn.addEventListener('click', confirmCreateRoom);
+    }
+
+    const colorPickerBackdrop = document.querySelector('#color-picker .modal-backdrop');
+    if (colorPickerBackdrop) {
+        colorPickerBackdrop.addEventListener('click', hideColorPicker);
+    }
 }
 
 function initKeyboardShortcuts() {
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      hideColorPicker();
-      const modal = document.getElementById('create-room-modal');
-      if (modal) modal.classList.add('hidden');
-      if (els.profileSidebar?.classList.contains('open')) {
-        els.profileSidebar.classList.remove('open');
-      }
-    }
-    
-    if ((e.key === 'u' || e.key === 'U') && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
-      if (socket) socket.emit('sayUno');
-    }
-    
-    if (e.code === 'Space' && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
-      e.preventDefault();
-      if (els.drawBtn && !els.drawBtn.classList.contains('disabled')) {
-        els.drawBtn.click();
-      }
-    }
-    
-    if (e.key === 'Enter' && state.screen === 'game') {
-      if (document.activeElement !== els.chatInput) {
-        e.preventDefault();
-        if (els.chatPanel && !els.chatPanel.classList.contains('open')) {
-          els.chatToggleBtn?.click();
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            hideColorPicker();
+            const modal = document.getElementById('create-room-modal');
+            if (modal) modal.classList.add('hidden');
+            if (els.profileSidebar?.classList.contains('open')) {
+                els.profileSidebar.classList.remove('open');
+            }
         }
-        setTimeout(() => els.chatInput?.focus(), 100);
-      }
-    }
-    
-    if ((e.key === 'c' || e.key === 'C') && state.screen === 'game') {
-      toggleChat();
-    }
-    
-    if ((e.key === 'p' || e.key === 'P') && state.screen === 'game') {
-      toggleProfile();
-    }
-    
-    if (e.key >= '1' && e.key <= '9' && state.screen === 'game') {
-      const index = parseInt(e.key) - 1;
-      const hand = state.gameState?.players?.find(p => p.isMe)?.hand;
-      if (hand && hand[index]) {
-        const card = hand[index];
-        const isMyTurn = state.gameState?.currentPlayerId === state.myId;
-        const playable = isMyTurn && canPlayCard(card, state.gameState?.topCard, state.gameState?.currentColor, state.gameState?.mustDraw, true);
-        if (playable) {
-          if (card.type === 'wild' || card.type === 'wild4') {
-            state.pendingCard = { card, index };
-            showColorPicker();
-          } else {
-            socket.emit('playCard', { cardIndex: index });
-          }
+
+        if ((e.key === 'u' || e.key === 'U') && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
+            if (socket) socket.emit('sayUno');
         }
-      }
-    }
-  });
+
+        if (e.code === 'Space' && state.screen === 'game' && document.activeElement?.tagName !== 'INPUT') {
+            e.preventDefault();
+            if (els.drawBtn && !els.drawBtn.classList.contains('disabled')) {
+                els.drawBtn.click();
+            }
+        }
+
+        if (e.key === 'Enter' && state.screen === 'game') {
+            if (document.activeElement !== els.chatInput) {
+                e.preventDefault();
+                if (els.chatPanel && !els.chatPanel.classList.contains('open')) {
+                    els.chatToggleBtn?.click();
+                }
+                setTimeout(() => els.chatInput?.focus(), 100);
+            }
+        }
+
+        if ((e.key === 'c' || e.key === 'C') && state.screen === 'game') {
+            toggleChat();
+        }
+
+        if ((e.key === 'p' || e.key === 'P') && state.screen === 'game') {
+            toggleProfile();
+        }
+
+        if (e.key >= '1' && e.key <= '9' && state.screen === 'game') {
+            const index = parseInt(e.key) - 1;
+            const hand = state.gameState?.players?.find(p => p.isMe)?.hand;
+            if (hand && hand[index]) {
+                const card = hand[index];
+                const isMyTurn = state.gameState?.currentPlayerId === state.myId;
+                const playable = isMyTurn && canPlayCard(card, state.gameState?.topCard, state.gameState?.currentColor, state.gameState?.mustDraw, true);
+                if (playable) {
+                    if (card.type === 'wild' || card.type === 'wild4') {
+                        state.pendingCard = { card, index };
+                        showColorPicker();
+                    } else {
+                        socket.emit('playCard', { cardIndex: index });
+                    }
+                }
+            }
+        }
+    });
 }
 
 async function loadLeaderboard() {
-  try {
-    const response = await fetch('/api/leaderboard');
-    const data = await response.json();
-    const container = document.getElementById('leaderboard-list');
-    if (container) {
-      container.innerHTML = '';
-      data.forEach((user, idx) => {
-        const div = document.createElement('div');
-        div.className = 'leaderboard-item';
-        div.innerHTML = `
-          <span class="rank">${idx + 1}</span>
-          <img src="${user.avatar_url}" width="30" height="30" style="border-radius:50%">
-          <span class="name">${escapeHtml(user.display_name)}</span>
-          <span class="wins">🏆 ${user.wins}</span>
-        `;
-        container.appendChild(div);
-      });
-    }
-  } catch(e) { console.error(e); }
+    try {
+        const response = await fetch('/api/leaderboard');
+        const data = await response.json();
+        const container = document.getElementById('leaderboard-list');
+        if (container) {
+            container.innerHTML = '';
+            data.forEach((user, idx) => {
+                const div = document.createElement('div');
+                div.className = 'leaderboard-item';
+                div.innerHTML = `
+                    <span class="rank">${idx + 1}</span>
+                    <img src="${user.avatar_url}" width="30" height="30" style="border-radius:50%">
+                    <span class="name">${escapeHtml(user.display_name)}</span>
+                    <span class="wins">🏆 ${user.wins}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+    } catch (e) { console.error(e); }
 }
 
 async function loadOnlineCount() {
-  try {
-    const response = await fetch('/api/online-users');
-    const data = await response.json();
-    const onlineEl = document.getElementById('online-count');
-    if (onlineEl) onlineEl.textContent = data.count;
-  } catch(e) { console.error(e); }
+    try {
+        const response = await fetch('/api/online-users');
+        const data = await response.json();
+        const onlineEl = document.getElementById('online-count');
+        if (onlineEl) onlineEl.textContent = data.count;
+    } catch (e) { console.error(e); }
 }
 
 function init() {
-  initEventListeners();
-  initKeyboardShortcuts();
-  loadLeaderboard();
-  loadOnlineCount();
-  
-  setInterval(() => {
-    if (socket && socket.connected) {
-      socket.emit('getRoomList');
-    }
+    initEventListeners();
+    initKeyboardShortcuts();
+    loadLeaderboard();
     loadOnlineCount();
-  }, 30000);
-  
-  const savedSession = localStorage.getItem('uno_session');
-  if (savedSession) {
-    authState.sessionToken = savedSession;
-    showLoading('Tizimga kirilmoqda...');
-    initSocket();
-  } else {
-    showScreen('auth');
-  }
+
+    setInterval(() => {
+        if (socket && socket.connected) {
+            socket.emit('getRoomList');
+        }
+        loadOnlineCount();
+    }, 30000);
+
+    const savedSession = localStorage.getItem('uno_session');
+    if (savedSession) {
+        authState.sessionToken = savedSession;
+        showLoading('Tizimga kirilmoqda...');
+        initSocket();
+    } else {
+        showScreen('auth');
+    }
 }
 
 init();
