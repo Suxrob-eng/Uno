@@ -26,11 +26,19 @@ app.use(compression());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
+// Trust proxy
+app.set('trust proxy', 1);
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: { error: 'Too many requests, please try again later.' }
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+  }
 });
 app.use('/api/', limiter);
 
@@ -209,7 +217,9 @@ function canPlay(card, topCard, currentColor, mustDraw) {
 // ==================== ROOM MANAGEMENT ====================
 const rooms = {};
 
-function getRoom(roomId) { return rooms[roomId]; }
+function getRoom(roomId) { 
+  return rooms[roomId]; 
+}
 
 function getRoomList() {
   return Object.values(rooms)
@@ -227,11 +237,16 @@ function drawCards(room, count) {
   const drawn = [];
   for (let i = 0; i < count; i++) {
     if (room.deck.length === 0) {
+      if (room.discardPile.length <= 1) {
+        break;
+      }
       const top = room.discardPile.pop();
       room.deck = shuffleDeck(room.discardPile);
       room.discardPile = [top];
     }
-    if (room.deck.length > 0) drawn.push(room.deck.shift());
+    if (room.deck.length > 0) {
+      drawn.push(room.deck.shift());
+    }
   }
   return drawn;
 }
@@ -240,7 +255,7 @@ function nextPlayer(room) {
   const count = room.players.length;
   let nextIndex = room.currentPlayerIndex;
   do {
-    nextIndex = ((nextIndex + room.direction) % count + count) % count;
+    nextIndex = (nextIndex + room.direction + count) % count;
   } while (room.players[nextIndex]?.skipTurn);
   
   room.currentPlayerIndex = nextIndex;
@@ -287,7 +302,7 @@ function buildGameState(room, playerId) {
     currentColor: room.currentColor,
     direction: room.direction,
     deckCount: room.deck.length,
-    mustDraw: room.mustDraw,
+    mustDraw: room.mustDraw || false,
     pendingDraw: room.pendingDraw || 0,
     turnStartTime: room.turnStartTime,
     turnDuration: room.turnDuration,
@@ -301,7 +316,7 @@ function buildGameState(room, playerId) {
       avatar: p.avatar || '/avatars/default1.svg',
       cardCount: p.hand.length,
       points: calculatePoints(p.hand),
-      hand: p.id === playerId ? p.hand : [],
+      hand: p.id === playerId ? p.hand.map(card => ({ ...card })) : [],
       isBot: p.isBot || false,
       isCurrentPlayer: i === room.currentPlayerIndex,
       isMe: p.id === playerId,
@@ -312,17 +327,21 @@ function buildGameState(room, playerId) {
 }
 
 function broadcastState(room) {
+  if (!room || !room.players) return;
   room.players.filter(p => !p.isBot).forEach(p => {
     const s = io.sockets.sockets.get(p.id);
-    if (s && s.connected) s.emit('gameUpdate', buildGameState(room, p.id));
+    if (s && s.connected) {
+      const gameState = buildGameState(room, p.id);
+      if (gameState) s.emit('gameUpdate', gameState);
+    }
   });
 }
 
 function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
   const player = room.players[playerIndex];
+  if (!player || !player.hand[cardIndex]) return null;
+  
   const card = player.hand[cardIndex];
-  if (!card) return null;
-
   player.hand.splice(cardIndex, 1);
   player.saidUno = false;
   room.discardPile.push(card);
@@ -333,11 +352,17 @@ function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
     room.currentColor = card.color;
   }
 
+  if (room.mustDraw) {
+    room.mustDraw = false;
+    room.pendingDraw = 0;
+  }
+
   if (player.hand.length === 0) {
     room.gameState = 'finished';
     room.winner = player.id;
     if (room.turnTimer) clearTimeout(room.turnTimer);
-    return { won: true, points: calculatePoints(room.players.reduce((sum, p) => sum + calculatePoints(p.hand), 0)) };
+    const totalPoints = room.players.reduce((sum, p) => sum + calculatePoints(p.hand), 0);
+    return { won: true, points: totalPoints };
   }
 
   if (card.value === 'skip') {
@@ -352,13 +377,13 @@ function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
       nextPlayer(room);
     }
   } else if (card.value === 'draw2') {
-    nextPlayer(room);
     room.pendingDraw = (room.pendingDraw || 0) + 2;
     room.mustDraw = true;
-  } else if (card.value === 'wild4') {
     nextPlayer(room);
+  } else if (card.value === 'wild4') {
     room.pendingDraw = (room.pendingDraw || 0) + 4;
     room.mustDraw = true;
+    nextPlayer(room);
   } else {
     nextPlayer(room);
   }
@@ -375,8 +400,11 @@ function applyDrawCard(room, playerIndex) {
     room.pendingDraw = 0;
     room.mustDraw = false;
   }
+  
   const drawn = drawCards(room, drawCount);
-  player.hand.push(...drawn);
+  if (drawn.length > 0) {
+    player.hand.push(...drawn);
+  }
   player.saidUno = false;
   player.skipTurn = false;
 
@@ -400,7 +428,7 @@ function botChooseCard(hand, topCard, currentColor, mustDraw, difficulty = 'medi
 
   if (playable.length === 0) return null;
 
-  let priority = (card) => {
+  let getPriority = (card) => {
     if (card.value === 'wild4') return 7;
     if (card.value === 'draw2') return 6;
     if (card.value === 'skip') return 5;
@@ -410,10 +438,8 @@ function botChooseCard(hand, topCard, currentColor, mustDraw, difficulty = 'medi
     return 1;
   };
 
-  if (difficulty === 'easy') {
-    return playable[Math.floor(Math.random() * playable.length)];
-  } else if (difficulty === 'hard') {
-    priority = (card) => {
+  if (difficulty === 'hard') {
+    getPriority = (card) => {
       if (card.value === 'wild4') return 8;
       if (card.value === 'draw2') return 7;
       if (card.value === 'skip') return 6;
@@ -424,7 +450,11 @@ function botChooseCard(hand, topCard, currentColor, mustDraw, difficulty = 'medi
     };
   }
 
-  playable.sort((a, b) => priority(b.card) - priority(a.card));
+  if (difficulty === 'easy') {
+    return playable[Math.floor(Math.random() * playable.length)];
+  }
+
+  playable.sort((a, b) => getPriority(b.card) - getPriority(a.card));
   return playable[0];
 }
 
@@ -498,6 +528,7 @@ function startGame(room) {
   room.pendingDraw = 0;
   room.mustDraw = false;
   room.winner = null;
+  room.currentPlayerIndex = 0;
 
   room.players.forEach(player => {
     player.hand = room.deck.splice(0, 7);
@@ -508,14 +539,17 @@ function startGame(room) {
   let firstCard;
   do {
     firstCard = room.deck.shift();
+    if (!firstCard) {
+      room.deck = shuffleDeck(createDeck());
+      firstCard = room.deck.shift();
+    }
     if (firstCard.type === 'wild' || firstCard.type === 'wild4') {
       room.deck.push(firstCard);
     }
-  } while (firstCard.type === 'wild' || firstCard.type === 'wild4');
+  } while (firstCard && (firstCard.type === 'wild' || firstCard.type === 'wild4'));
 
   room.discardPile = [firstCard];
   room.currentColor = firstCard.color;
-  room.currentPlayerIndex = 0;
   
   startTurnTimer(room);
   scheduleNextBotTurn(room);
@@ -662,8 +696,8 @@ app.post('/api/update-profile', async (req, res) => {
     
     const user = users.get(sessionUser.id.toString());
     if (user) {
-      user.display_name = displayName;
-      user.avatar_url = avatar;
+      user.display_name = displayName || user.display_name;
+      user.avatar_url = avatar || user.avatar_url;
       users.set(sessionUser.id.toString(), user);
     }
     
@@ -725,6 +759,7 @@ io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
   socket.userData = null;
   socket.userId = null;
+  socket.roomId = null;
 
   socket.on('auth', async ({ sessionToken }) => {
     try {
@@ -749,24 +784,46 @@ io.on('connection', (socket) => {
   });
 
   socket.on('createRoom', ({ privacy, maxPlayers, password }) => {
-    if (!socket.userData) return socket.emit('error', { message: 'Avval tizimga kiring!' });
+    if (!socket.userData) {
+      socket.emit('error', { message: 'Avval tizimga kiring!' });
+      return;
+    }
     
     const roomId = Math.random().toString(36).substr(2, 9).toUpperCase();
     rooms[roomId] = {
-      id: roomId, host: socket.id, players: [],
-      deck: [], discardPile: [], currentPlayerIndex: 0,
-      direction: 1, currentColor: null, gameState: 'waiting',
-      pendingDraw: 0, mustDraw: false, winner: null,
-      privacy: privacy || 'open', maxPlayers: maxPlayers || 8,
-      password: password || null, createdAt: Date.now(),
-      turnStartTime: null, turnDuration: 20000, turnTimer: null
+      id: roomId, 
+      host: socket.id, 
+      players: [],
+      deck: [], 
+      discardPile: [], 
+      currentPlayerIndex: 0,
+      direction: 1, 
+      currentColor: null, 
+      gameState: 'waiting',
+      pendingDraw: 0, 
+      mustDraw: false, 
+      winner: null,
+      privacy: privacy || 'open', 
+      maxPlayers: maxPlayers || 8,
+      password: password || null, 
+      createdAt: Date.now(),
+      turnStartTime: null, 
+      turnDuration: 20000, 
+      turnTimer: null
     };
     
     const room = rooms[roomId];
     room.players.push({ 
-      id: socket.id, userId: socket.userId, name: socket.userData.displayName, 
-      username: socket.userData.username, avatar: socket.userData.avatar, 
-      hand: [], saidUno: false, isBot: false, skipTurn: false 
+      id: socket.id, 
+      userId: socket.userId, 
+      name: socket.userData.displayName, 
+      username: socket.userData.username, 
+      avatar: socket.userData.avatar, 
+      hand: [], 
+      saidUno: false, 
+      isBot: false, 
+      skipTurn: false,
+      displayName: socket.userData.displayName
     });
     socket.join(roomId);
     socket.roomId = roomId;
@@ -776,28 +833,45 @@ io.on('connection', (socket) => {
     console.log(`Room ${roomId} created by ${socket.userData.displayName}`);
   });
 
-  socket.on('joinRoom', async ({ roomId, password }) => {
-    if (!socket.userData) return socket.emit('error', { message: 'Avval tizimga kiring!' });
+  socket.on('joinRoom', ({ roomId, password }) => {
+    if (!socket.userData) {
+      socket.emit('error', { message: 'Avval tizimga kiring!' });
+      return;
+    }
     
     const room = getRoom(roomId);
-    if (!room) return socket.emit('error', { message: 'Xona topilmadi!' });
+    if (!room) {
+      socket.emit('error', { message: 'Xona topilmadi!' });
+      return;
+    }
     if (room.privacy === 'private' && room.password !== password) {
-      return socket.emit('error', { message: 'Xona paroli noto\'g\'ri!' });
+      socket.emit('error', { message: 'Xona paroli noto\'g\'ri!' });
+      return;
     }
     if (room.players.some(p => p.id === socket.id)) {
-      return socket.emit('error', { message: 'Siz allaqachon bu xonadasiz!' });
+      socket.emit('error', { message: 'Siz allaqachon bu xonadasiz!' });
+      return;
     }
     if (room.gameState !== 'waiting') {
-      return socket.emit('error', { message: 'O\'yin allaqachon boshlangan!' });
+      socket.emit('error', { message: 'O\'yin allaqachon boshlangan!' });
+      return;
     }
     if (room.players.length >= room.maxPlayers) {
-      return socket.emit('error', { message: `Xona to\'lgan! (maks ${room.maxPlayers})` });
+      socket.emit('error', { message: `Xona to\'lgan! (maks ${room.maxPlayers})` });
+      return;
     }
     
     room.players.push({ 
-      id: socket.id, userId: socket.userId, name: socket.userData.displayName,
-      username: socket.userData.username, avatar: socket.userData.avatar,
-      hand: [], saidUno: false, isBot: false, skipTurn: false 
+      id: socket.id, 
+      userId: socket.userId, 
+      name: socket.userData.displayName,
+      username: socket.userData.username, 
+      avatar: socket.userData.avatar,
+      hand: [], 
+      saidUno: false, 
+      isBot: false, 
+      skipTurn: false,
+      displayName: socket.userData.displayName
     });
     socket.join(roomId);
     socket.roomId = roomId;
@@ -809,17 +883,32 @@ io.on('connection', (socket) => {
   socket.on('addBot', ({ difficulty }) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
-    if (room.host !== socket.id) return socket.emit('error', { message: 'Faqat host bot qo\'sha oladi!' });
-    if (room.gameState !== 'waiting') return socket.emit('error', { message: 'O\'yin boshlangan!' });
-    if (room.players.length >= room.maxPlayers) return socket.emit('error', { message: `Xona to\'lgan! (maks ${room.maxPlayers})` });
+    if (room.host !== socket.id) {
+      socket.emit('error', { message: 'Faqat host bot qo\'sha oladi!' });
+      return;
+    }
+    if (room.gameState !== 'waiting') {
+      socket.emit('error', { message: 'O\'yin boshlangan!' });
+      return;
+    }
+    if (room.players.length >= room.maxPlayers) {
+      socket.emit('error', { message: `Xona to\'lgan! (maks ${room.maxPlayers})` });
+      return;
+    }
 
     const botCount = room.players.filter(p => p.isBot).length;
     const botName = BOT_NAMES[botCount % BOT_NAMES.length];
     const botId = `BOT_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
 
     room.players.push({
-      id: botId, name: botName, displayName: botName, avatar: '/avatars/bot.svg',
-      hand: [], saidUno: false, isBot: true, skipTurn: false,
+      id: botId, 
+      name: botName, 
+      displayName: botName, 
+      avatar: '/avatars/bot.svg',
+      hand: [], 
+      saidUno: false, 
+      isBot: true, 
+      skipTurn: false,
       difficulty: difficulty || 'medium'
     });
     broadcastState(room);
@@ -840,45 +929,68 @@ io.on('connection', (socket) => {
     io.emit('roomListUpdate', getRoomList());
   });
 
-  socket.on('getRoomList', () => socket.emit('roomListUpdate', getRoomList()));
+  socket.on('getRoomList', () => {
+    socket.emit('roomListUpdate', getRoomList());
+  });
   
   socket.on('startGame', () => {
     const room = getRoom(socket.roomId);
     if (!room) return;
-    if (room.host !== socket.id) return socket.emit('error', { message: 'Faqat host boshlashi mumkin!' });
-    if (room.players.filter(p => !p.isBot).length < 1) return socket.emit('error', { message: 'Kamida 1 haqiqiy o\'yinchi kerak!' });
+    if (room.host !== socket.id) {
+      socket.emit('error', { message: 'Faqat host boshlashi mumkin!' });
+      return;
+    }
+    if (room.players.filter(p => !p.isBot).length < 1) {
+      socket.emit('error', { message: 'Kamida 1 haqiqiy o\'yinchi kerak!' });
+      return;
+    }
     startGame(room);
     broadcastState(room);
     io.to(socket.roomId).emit('gameStarted');
     io.to(socket.roomId).emit('chatMessage', { type: 'system', message: '🎮 O\'yin boshlandi! Yaxshi o\'yin! Omad!' });
     io.emit('roomListUpdate', getRoomList());
-    scheduleNextBotTurn(room);
   });
 
   socket.on('playCard', ({ cardIndex, chosenColor }) => {
     const room = getRoom(socket.roomId);
     if (!room || room.gameState !== 'playing') return;
+    
     const player = room.players.find(p => p.id === socket.id);
     if (!player) return;
-    const isCurrentPlayer = (room.players[room.currentPlayerIndex].id === socket.id);
+    
+    const isCurrentPlayer = (room.players[room.currentPlayerIndex]?.id === socket.id);
     const card = player.hand[cardIndex];
-    if (!card) return socket.emit('error', { message: 'Karta topilmadi!' });
+    if (!card) {
+      socket.emit('error', { message: 'Karta topilmadi!' });
+      return;
+    }
+    
     const topCard = getTopCard(room);
+    
     const isJumpIn = (!isCurrentPlayer && card.type !== 'wild' && card.type !== 'wild4' && 
                       card.color === topCard.color && card.value === topCard.value);
     
-    if (!isCurrentPlayer && !isJumpIn) return socket.emit('error', { message: 'Siz navbatda emassiz!' });
-    if (isCurrentPlayer && !canPlay(card, topCard, room.currentColor, room.mustDraw)) {
-      return socket.emit('error', { message: 'Bu kartani o\'ynab bo\'lmaydi!' });
+    if (!isCurrentPlayer && !isJumpIn) {
+      socket.emit('error', { message: 'Siz navbatda emassiz!' });
+      return;
     }
-    if (isJumpIn && room.mustDraw) return socket.emit('error', { message: 'Jazo kartasi ustida Jump-In qilib bo\'lmaydi!' });
+    if (isCurrentPlayer && !canPlay(card, topCard, room.currentColor, room.mustDraw)) {
+      socket.emit('error', { message: 'Bu kartani o\'ynab bo\'lmaydi!' });
+      return;
+    }
+    if (isJumpIn && room.mustDraw) {
+      socket.emit('error', { message: 'Jazo kartasi ustida Jump-In qilib bo\'lmaydi!' });
+      return;
+    }
     
+    let actualPlayerIndex = room.currentPlayerIndex;
     if (isJumpIn) {
-      room.currentPlayerIndex = room.players.indexOf(player);
+      actualPlayerIndex = room.players.findIndex(p => p.id === socket.id);
+      room.currentPlayerIndex = actualPlayerIndex;
       io.to(room.id).emit('chatMessage', { type: 'system', message: `⚡ ${player.name} JUMP-IN qildi!` });
     }
     
-    const result = applyPlayCard(room, room.currentPlayerIndex, cardIndex, chosenColor);
+    const result = applyPlayCard(room, actualPlayerIndex, cardIndex, chosenColor);
     io.to(socket.roomId).emit('cardPlayed', { playerName: player.name, card });
     
     if (result && result.won) {
@@ -905,9 +1017,11 @@ io.on('connection', (socket) => {
   socket.on('drawCard', () => {
     const room = getRoom(socket.roomId);
     if (!room || room.gameState !== 'playing') return;
+    
     const currentPlayer = room.players[room.currentPlayerIndex];
     if (!currentPlayer || currentPlayer.id !== socket.id) {
-      return socket.emit('error', { message: 'Siz navbatda emassiz!' });
+      socket.emit('error', { message: 'Siz navbatda emassiz!' });
+      return;
     }
     applyDrawCard(room, room.currentPlayerIndex);
     broadcastState(room);
@@ -1006,4 +1120,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🎮 UNO Server running on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`🎮 UNO Server running on http://localhost:${PORT}`));  

@@ -164,7 +164,7 @@ function showNotif(msg) {
     els.notifToast.textContent = msg;
     els.notifToast.classList.remove('hidden');
     clearTimeout(notifTimeout);
-    notifTimeout = setTimeout(() => els.notifToast.classList.add('hidden'), 3000);
+    notifTimeout = setTimeout(() => els.notifToast.classList.add('hidden'), 2000);
 }
 
 function getCardLabel(card) {
@@ -173,10 +173,11 @@ function getCardLabel(card) {
     return labels[card.value] || card.value;
 }
 
-function createCardElement(card, isPlayable = true) {
+function createCardElement(card, isPlayable = true, isJumpIn = false) {
     const div = document.createElement('div');
     const colorClass = (card.type === 'wild' || card.type === 'wild4') ? 'wild' : card.color;
     div.className = `card ${colorClass}`;
+    if (isJumpIn) div.classList.add('jump-in');
     const label = getCardLabel(card);
     div.innerHTML = `
         <span class="card-corner tl">${label}</span>
@@ -279,7 +280,7 @@ function renderMyHand(gs, isMyTurn) {
         }
         if (isJumpIn) wrapper.classList.add('jump-in-glow');
 
-        const cardEl = createCardElement(card, playable);
+        const cardEl = createCardElement(card, playable, isJumpIn);
         wrapper.appendChild(cardEl);
 
         if (playable) {
@@ -1084,7 +1085,12 @@ function initEventListeners() {
         });
     }
 
-    if (els.leaveRoomBtn) els.leaveRoomBtn.addEventListener('click', () => location.reload());
+    if (els.leaveRoomBtn) {
+        els.leaveRoomBtn.addEventListener('click', () => {
+            if (socket) socket.emit('leaveRoom');
+            location.reload();
+        });
+    }
 
     if (els.copyCodeBtn) {
         els.copyCodeBtn.addEventListener('click', () => {

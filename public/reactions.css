@@ -80,7 +80,6 @@
     }
 }
 
-/* Reaction toast styles */
 .reaction-toast {
     position: fixed;
     background: rgba(0, 0, 0, 0.7);
@@ -118,7 +117,6 @@
     }
 }
 
-/* Mobile adjustments */
 @media (max-width: 700px) {
     .reaction-actions {
         bottom: 16px;
