@@ -89,14 +89,21 @@ function createUser(username, passwordHash, displayName, avatarUrl) {
   return parseInt(userId);
 }
 
-function updateUserStats(userId, won, points, unoCalled, catchUno) {
+function updateUserStats(userId, rank, points, unoCalled, catchUno) {
   const stats = userStats.get(userId.toString()) || { wins: 0, losses: 0, games_played: 0, total_points: 0, uno_count: 0, catch_uno_count: 0 };
   
-  if (won) stats.wins++;
+  // Reyting bo'yicha ball berish: 1-o'rin 10 ball, 2-o'rin 7 ball, 3-o'rin 5 ball, 4-8 o'rinlar 2 ball
+  let rankPoints = 0;
+  if (rank === 1) rankPoints = 10;
+  else if (rank === 2) rankPoints = 7;
+  else if (rank === 3) rankPoints = 5;
+  else if (rank >= 4 && rank <= 8) rankPoints = 2;
+  
+  if (rank === 1) stats.wins++;
   else stats.losses++;
   
   stats.games_played++;
-  stats.total_points += points;
+  stats.total_points += (points || 0) + rankPoints;
   if (unoCalled) stats.uno_count++;
   if (catchUno) stats.catch_uno_count++;
   
@@ -252,16 +259,79 @@ function drawCards(room, count) {
 }
 
 function nextPlayer(room) {
-  const count = room.players.length;
+  const count = room.players.filter(p => !p.finished).length;
+  if (count <= 1) {
+    // O'yin tugadi, reytingni hisobla
+    finishGameWithRankings(room);
+    return;
+  }
+  
   let nextIndex = room.currentPlayerIndex;
   do {
-    nextIndex = (nextIndex + room.direction + count) % count;
-  } while (room.players[nextIndex]?.skipTurn);
+    nextIndex = (nextIndex + room.direction + room.players.length) % room.players.length;
+  } while (room.players[nextIndex]?.finished || room.players[nextIndex]?.skipTurn);
   
   room.currentPlayerIndex = nextIndex;
   
   room.players.forEach(p => { if (p.skipTurn) p.skipTurn = false; });
   startTurnTimer(room);
+}
+
+function finishGameWithRankings(room) {
+  if (room.gameState !== 'playing') return;
+  
+  // Reytingni hisoblash: kim oldin chiqqan bo'lsa, shuncha yaxshi o'rin
+  const finishedPlayers = room.players.filter(p => p.finished).sort((a, b) => a.finishedOrder - b.finishedOrder);
+  const remainingPlayers = room.players.filter(p => !p.finished);
+  
+  // Qolgan o'yinchilarni kartalari soniga qarab tartiblash (kam kartali yaxshiroq)
+  remainingPlayers.sort((a, b) => {
+    const pointsA = calculatePoints(a.hand);
+    const pointsB = calculatePoints(b.hand);
+    if (pointsA !== pointsB) return pointsA - pointsB;
+    return a.hand.length - b.hand.length;
+  });
+  
+  // Reytingni yig'ish
+  const rankings = [];
+  let currentRank = 1;
+  
+  // Avval tugatgan o'yinchilar
+  for (const player of finishedPlayers) {
+    rankings.push({
+      id: player.id,
+      userId: player.userId,
+      name: player.name,
+      rank: currentRank++,
+      points: calculatePoints(player.hand),
+      isBot: player.isBot || false
+    });
+  }
+  
+  // Qolgan o'yinchilar
+  for (const player of remainingPlayers) {
+    rankings.push({
+      id: player.id,
+      userId: player.userId,
+      name: player.name,
+      rank: currentRank++,
+      points: calculatePoints(player.hand),
+      isBot: player.isBot || false
+    });
+  }
+  
+  room.gameState = 'finished';
+  room.finalRankings = rankings;
+  
+  // Statistikani yangilash
+  for (const ranking of rankings) {
+    if (ranking.userId && !ranking.isBot) {
+      updateUserStats(ranking.userId, ranking.rank, ranking.points, false, false);
+    }
+  }
+  
+  if (room.turnTimer) clearTimeout(room.turnTimer);
+  broadcastState(room);
 }
 
 function startTurnTimer(room) {
@@ -275,7 +345,7 @@ function startTurnTimer(room) {
     const r = getRoom(room.id);
     if (!r) return;
     const currentPlayer = r.players[r.currentPlayerIndex];
-    if (currentPlayer && !currentPlayer.isBot) {
+    if (currentPlayer && !currentPlayer.isBot && !currentPlayer.finished) {
       applyDrawCard(r, r.currentPlayerIndex);
       broadcastState(r);
       scheduleNextBotTurn(r);
@@ -309,6 +379,7 @@ function buildGameState(room, playerId) {
     topCard: topCard,
     currentPlayerId: room.players[room.currentPlayerIndex]?.id,
     winner: winnerPlayer ? { id: winnerPlayer.id, name: winnerPlayer.name, isBot: winnerPlayer.isBot } : null,
+    finalRankings: room.finalRankings || null,
     players: room.players.map((p, i) => ({
       id: p.id,
       name: p.name,
@@ -321,7 +392,9 @@ function buildGameState(room, playerId) {
       isCurrentPlayer: i === room.currentPlayerIndex,
       isMe: p.id === playerId,
       saidUno: p.saidUno || false,
-      skipTurn: p.skipTurn || false
+      skipTurn: p.skipTurn || false,
+      finished: p.finished || false,
+      rank: p.finishedOrder ? null : null
     }))
   };
 }
@@ -357,17 +430,32 @@ function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
     room.pendingDraw = 0;
   }
 
-  if (player.hand.length === 0) {
-    room.gameState = 'finished';
-    room.winner = player.id;
-    if (room.turnTimer) clearTimeout(room.turnTimer);
-    const totalPoints = room.players.reduce((sum, p) => sum + calculatePoints(p.hand), 0);
-    return { won: true, points: totalPoints };
+  // O'yinchi tugatdimi?
+  if (player.hand.length === 0 && !player.finished) {
+    player.finished = true;
+    player.finishedOrder = (room.finishedCount || 0) + 1;
+    room.finishedCount = (room.finishedCount || 0) + 1;
+    
+    io.to(room.id).emit('chatMessage', { 
+      type: 'system', 
+      message: `🏆 ${player.name} ${player.finishedOrder}-o'ringa chiqdi! (Kartalar tugadi)` 
+    });
+    
+    // Agar hamma tugatgan bo'lsa, o'yinni tugat
+    const activePlayers = room.players.filter(p => !p.finished).length;
+    if (activePlayers === 0) {
+      finishGameWithRankings(room);
+      return { won: false, finished: true };
+    }
+    
+    // Keyingi o'yinchiga o'tish
+    nextPlayer(room);
+    return { won: false, finished: true };
   }
 
   if (card.value === 'skip') {
     const nextIdx = (room.currentPlayerIndex + room.direction + room.players.length) % room.players.length;
-    if (room.players[nextIdx] && !room.players[nextIdx].isBot) {
+    if (room.players[nextIdx] && !room.players[nextIdx].isBot && !room.players[nextIdx].finished) {
       room.players[nextIdx].skipTurn = true;
     }
     nextPlayer(room);
@@ -393,6 +481,11 @@ function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
 
 function applyDrawCard(room, playerIndex) {
   const player = room.players[playerIndex];
+  if (player.finished) {
+    nextPlayer(room);
+    return;
+  }
+  
   let drawCount = 1;
 
   if (room.pendingDraw && room.pendingDraw > 0) {
@@ -463,6 +556,11 @@ function botTakeTurn(room, botIndex) {
   if (!bot || !bot.isBot) return;
   if (room.currentPlayerIndex !== botIndex) return;
   if (room.gameState !== 'playing') return;
+  if (bot.finished) {
+    nextPlayer(room);
+    scheduleNextBotTurn(room);
+    return;
+  }
 
   const topCard = getTopCard(room);
   const chosen = botChooseCard(bot.hand, topCard, room.currentColor, room.mustDraw, bot.difficulty);
@@ -497,9 +595,8 @@ function botTakeTurn(room, botIndex) {
     }, 300);
   }
 
-  if (result && result.won) {
+  if (result && result.finished) {
     broadcastState(room);
-    io.to(room.id).emit('chatMessage', { type: 'system', message: `🏆 ${bot.name} g'olib bo'ldi! (${result.points} ball)` });
     return;
   }
 
@@ -510,7 +607,7 @@ function botTakeTurn(room, botIndex) {
 function scheduleNextBotTurn(room) {
   if (room.gameState !== 'playing') return;
   const currentPlayer = room.players[room.currentPlayerIndex];
-  if (currentPlayer && currentPlayer.isBot) {
+  if (currentPlayer && currentPlayer.isBot && !currentPlayer.finished) {
     const delay = 800 + Math.random() * 700;
     setTimeout(() => {
       const r = getRoom(room.id);
@@ -529,11 +626,15 @@ function startGame(room) {
   room.mustDraw = false;
   room.winner = null;
   room.currentPlayerIndex = 0;
+  room.finishedCount = 0;
+  room.finalRankings = null;
 
   room.players.forEach(player => {
     player.hand = room.deck.splice(0, 7);
     player.saidUno = false;
     player.skipTurn = false;
+    player.finished = false;
+    player.finishedOrder = null;
   });
 
   let firstCard;
@@ -809,7 +910,9 @@ io.on('connection', (socket) => {
       createdAt: Date.now(),
       turnStartTime: null, 
       turnDuration: 20000, 
-      turnTimer: null
+      turnTimer: null,
+      finishedCount: 0,
+      finalRankings: null
     };
     
     const room = rooms[roomId];
@@ -823,6 +926,8 @@ io.on('connection', (socket) => {
       saidUno: false, 
       isBot: false, 
       skipTurn: false,
+      finished: false,
+      finishedOrder: null,
       displayName: socket.userData.displayName
     });
     socket.join(roomId);
@@ -871,6 +976,8 @@ io.on('connection', (socket) => {
       saidUno: false, 
       isBot: false, 
       skipTurn: false,
+      finished: false,
+      finishedOrder: null,
       displayName: socket.userData.displayName
     });
     socket.join(roomId);
@@ -909,6 +1016,8 @@ io.on('connection', (socket) => {
       saidUno: false, 
       isBot: true, 
       skipTurn: false,
+      finished: false,
+      finishedOrder: null,
       difficulty: difficulty || 'medium'
     });
     broadcastState(room);
@@ -957,6 +1066,10 @@ io.on('connection', (socket) => {
     
     const player = room.players.find(p => p.id === socket.id);
     if (!player) return;
+    if (player.finished) {
+      socket.emit('error', { message: 'Siz allaqachon o\'yinni tugatdingiz!' });
+      return;
+    }
     
     const isCurrentPlayer = (room.players[room.currentPlayerIndex]?.id === socket.id);
     const card = player.hand[cardIndex];
@@ -993,23 +1106,11 @@ io.on('connection', (socket) => {
     const result = applyPlayCard(room, actualPlayerIndex, cardIndex, chosenColor);
     io.to(socket.roomId).emit('cardPlayed', { playerName: player.name, card });
     
-    if (result && result.won) {
+    if (result && result.finished) {
       broadcastState(room);
-      io.to(socket.roomId).emit('chatMessage', { type: 'system', message: `🏆 ${player.name} g'olib bo'ldi! (${result.points} ball)` });
-      io.emit('roomListUpdate', getRoomList());
-      
-      if (player.userId) {
-        updateUserStats(player.userId, true, result.points, player.saidUno, false);
-      }
-      
-      room.players.forEach(p => {
-        if (p.userId && p.id !== socket.id && !p.isBot) {
-          updateUserStats(p.userId, false, 0, false, false);
-        }
-      });
-      
       return;
     }
+    
     broadcastState(room);
     scheduleNextBotTurn(room);
   });
@@ -1023,6 +1124,10 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Siz navbatda emassiz!' });
       return;
     }
+    if (currentPlayer.finished) {
+      socket.emit('error', { message: 'Siz allaqachon o\'yinni tugatdingiz!' });
+      return;
+    }
     applyDrawCard(room, room.currentPlayerIndex);
     broadcastState(room);
     scheduleNextBotTurn(room);
@@ -1032,7 +1137,7 @@ io.on('connection', (socket) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
     const player = room.players.find(p => p.id === socket.id);
-    if (player && player.hand.length === 1) {
+    if (player && player.hand.length === 1 && !player.finished) {
       player.saidUno = true;
       io.to(socket.roomId).emit('chatMessage', { type: 'uno', message: `🎴 ${player.name} UNO dedi!` });
       broadcastState(room);
@@ -1043,7 +1148,7 @@ io.on('connection', (socket) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
     const target = room.players.find(p => p.id === targetId);
-    if (target && target.hand.length === 1 && !target.saidUno && target.id !== socket.id) {
+    if (target && target.hand.length === 1 && !target.saidUno && target.id !== socket.id && !target.finished) {
       const drawn = drawCards(room, 2);
       target.hand.push(...drawn);
       io.to(socket.roomId).emit('chatMessage', {
@@ -1053,7 +1158,7 @@ io.on('connection', (socket) => {
       broadcastState(room);
       
       if (socket.userId) {
-        updateUserStats(socket.userId, false, 0, false, true);
+        updateUserStats(socket.userId, 0, 0, false, true);
       }
     }
   });
@@ -1120,4 +1225,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🎮 UNO Server running on http://localhost:${PORT}`));  
+server.listen(PORT, () => console.log(`🎮 UNO Server running on http://localhost:${PORT}`));

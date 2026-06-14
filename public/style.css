@@ -648,6 +648,16 @@ body {
     font-weight: 800;
 }
 
+.rank-badge {
+    background: linear-gradient(135deg, #f1c40f, #e67e22);
+    color: #000;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 800;
+    margin-top: 4px;
+}
+
 .uno-badge {
     background: linear-gradient(135deg, #ffd32a, #ff6b35);
     color: #000;
@@ -838,7 +848,7 @@ body {
     border: 1px solid rgba(243, 156, 18, 0.4);
 }
 
-/* CARD STYLES - KATTA VA ANIQ */
+/* CARD STYLES */
 .card {
     width: 120px;
     height: 168px;
@@ -960,7 +970,7 @@ body {
     }
 }
 
-/* PLAYER AREA - KENGAYTIRILGAN VA TEPAROQDA */
+/* PLAYER AREA */
 .player-area {
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.4) 100%);
     border-top: 2px solid var(--border);
@@ -1361,7 +1371,7 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 32px;
-    max-width: 400px;
+    max-width: 500px;
     width: 90%;
     animation: modalIn 0.3s ease;
     box-shadow: 0 40px 80px rgba(0, 0, 0, 0.8);
@@ -1436,8 +1446,87 @@ body {
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
+/* RANKINGS STYLES */
+.rankings-message {
+    margin: 20px 0;
+}
+
+.rankings-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.rankings-header {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.ranking-item {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    align-items: center;
+    text-align: center;
+    transition: var(--transition);
+    border: 1px solid transparent;
+}
+
+.ranking-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(4px);
+}
+
+.ranking-item.my-rank {
+    background: rgba(255, 71, 87, 0.15);
+    border-color: rgba(255, 71, 87, 0.4);
+}
+
+.rank-number {
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.rank-name {
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    padding-left: 10px;
+}
+
+.rank-points {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffd32a;
+}
+
+.rank-1 .rank-number {
+    color: #ffd700;
+    text-shadow: 0 0 10px #ffd700;
+}
+
+.rank-2 .rank-number {
+    color: #c0c0c0;
+}
+
+.rank-3 .rank-number {
+    color: #cd7f32;
+}
+
 .win-content {
     text-align: center;
+    max-width: 450px;
 }
 
 .win-animation {
@@ -1457,20 +1546,15 @@ body {
 }
 
 .win-content h2 {
-    font-size: 32px;
+    font-size: 28px;
     margin-bottom: 8px;
-}
-
-.win-content p {
-    color: var(--text-secondary);
-    margin-bottom: 24px;
-    font-size: 16px;
 }
 
 .win-actions {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    margin-top: 20px;
 }
 
 /* TOASTS */
@@ -2045,66 +2129,8 @@ body {
     font-size: 20px;
 }
 
-/* REACTION ACTIONS */
-.reaction-actions {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    display: flex;
-    gap: 10px;
-    z-index: 100;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--border);
-    padding: 10px 15px;
-    border-radius: 50px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.btn-reaction {
-    background: transparent;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s;
-    border-radius: 50%;
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.btn-reaction:hover {
-    transform: scale(1.3);
-    background: rgba(255, 255, 255, 0.15);
-}
-
-.floating-reaction {
-    position: fixed;
-    font-size: 36px;
-    pointer-events: none;
-    z-index: 999;
-    animation: floatUp 2s ease-out forwards;
-    filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
-}
-
-@keyframes floatUp {
-    0% {
-        transform: translateY(0) scale(0.5);
-        opacity: 0;
-    }
-
-    20% {
-        transform: translateY(-30px) scale(1.3);
-        opacity: 1;
-    }
-
-    100% {
-        transform: translateY(-150px) scale(1);
-        opacity: 0;
-    }
-}
+/* REACTION ACTIONS - style.css da mavjud */
+/* reactions.css da batafsil */
 
 /* SCROLLBAR */
 ::-webkit-scrollbar {
@@ -2208,6 +2234,19 @@ body {
         font-size: 12px;
         padding: 4px 12px;
     }
+
+    .rankings-header, .ranking-item {
+        grid-template-columns: 50px 1fr 70px;
+        font-size: 12px;
+    }
+    
+    .rank-number {
+        font-size: 16px;
+    }
+    
+    .rank-name {
+        font-size: 12px;
+    }
 }
 
 @media (max-width: 500px) {
@@ -2279,17 +2318,5 @@ body {
         width: 44px;
         height: 44px;
         font-size: 18px;
-    }
-
-    .reaction-actions {
-        bottom: 16px;
-        right: 16px;
-        gap: 4px;
-    } 
-
-    .btn-reaction {
-        width: 40px;
-        height: 40px;
-        font-size: 20px;
     }
 }
