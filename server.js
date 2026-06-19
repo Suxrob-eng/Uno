@@ -92,7 +92,6 @@ function createUser(username, passwordHash, displayName, avatarUrl) {
 function updateUserStats(userId, rank, points, unoCalled, catchUno) {
   const stats = userStats.get(userId.toString()) || { wins: 0, losses: 0, games_played: 0, total_points: 0, uno_count: 0, catch_uno_count: 0 };
   
-  // Reyting bo'yicha ball berish: 1-o'rin 10 ball, 2-o'rin 7 ball, 3-o'rin 5 ball, 4-8 o'rinlar 2 ball
   let rankPoints = 0;
   if (rank === 1) rankPoints = 10;
   else if (rank === 2) rankPoints = 7;
@@ -109,7 +108,6 @@ function updateUserStats(userId, rank, points, unoCalled, catchUno) {
   
   userStats.set(userId.toString(), stats);
   
-  // Check achievements
   const userAchievements = globalUserAchievements.get(userId.toString()) || [];
   for (const ach of ACHIEVEMENTS) {
     if (!userAchievements.find(a => a.id === ach.id)) {
@@ -261,7 +259,6 @@ function drawCards(room, count) {
 function nextPlayer(room) {
   const count = room.players.filter(p => !p.finished).length;
   if (count <= 1) {
-    // O'yin tugadi, reytingni hisobla
     finishGameWithRankings(room);
     return;
   }
@@ -280,11 +277,9 @@ function nextPlayer(room) {
 function finishGameWithRankings(room) {
   if (room.gameState !== 'playing') return;
   
-  // Reytingni hisoblash: kim oldin chiqqan bo'lsa, shuncha yaxshi o'rin
   const finishedPlayers = room.players.filter(p => p.finished).sort((a, b) => a.finishedOrder - b.finishedOrder);
   const remainingPlayers = room.players.filter(p => !p.finished);
   
-  // Qolgan o'yinchilarni kartalari soniga qarab tartiblash (kam kartali yaxshiroq)
   remainingPlayers.sort((a, b) => {
     const pointsA = calculatePoints(a.hand);
     const pointsB = calculatePoints(b.hand);
@@ -292,11 +287,9 @@ function finishGameWithRankings(room) {
     return a.hand.length - b.hand.length;
   });
   
-  // Reytingni yig'ish
   const rankings = [];
   let currentRank = 1;
   
-  // Avval tugatgan o'yinchilar
   for (const player of finishedPlayers) {
     rankings.push({
       id: player.id,
@@ -308,7 +301,6 @@ function finishGameWithRankings(room) {
     });
   }
   
-  // Qolgan o'yinchilar
   for (const player of remainingPlayers) {
     rankings.push({
       id: player.id,
@@ -323,7 +315,6 @@ function finishGameWithRankings(room) {
   room.gameState = 'finished';
   room.finalRankings = rankings;
   
-  // Statistikani yangilash
   for (const ranking of rankings) {
     if (ranking.userId && !ranking.isBot) {
       updateUserStats(ranking.userId, ranking.rank, ranking.points, false, false);
@@ -432,6 +423,22 @@ function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
 
   // O'yinchi tugatdimi?
   if (player.hand.length === 0 && !player.finished) {
+    // UNO demaganligini tekshirish
+    if (!player.saidUno && player.hand.length === 0) {
+      // UNO demagan bo'lsa, 2 ta karta oladi
+      const drawn = drawCards(room, 2);
+      if (drawn.length > 0) {
+        player.hand.push(...drawn);
+      }
+      io.to(room.id).emit('chatMessage', { 
+        type: 'system', 
+        message: `⚠️ ${player.name} UNO demadi! +2 karta!` 
+      });
+      broadcastState(room);
+      nextPlayer(room);
+      return { won: false, finished: false };
+    }
+    
     player.finished = true;
     player.finishedOrder = (room.finishedCount || 0) + 1;
     room.finishedCount = (room.finishedCount || 0) + 1;
@@ -441,14 +448,12 @@ function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
       message: `🏆 ${player.name} ${player.finishedOrder}-o'ringa chiqdi! (Kartalar tugadi)` 
     });
     
-    // Agar hamma tugatgan bo'lsa, o'yinni tugat
     const activePlayers = room.players.filter(p => !p.finished).length;
     if (activePlayers === 0) {
       finishGameWithRankings(room);
       return { won: false, finished: true };
     }
     
-    // Keyingi o'yinchiga o'tish
     nextPlayer(room);
     return { won: false, finished: true };
   }
@@ -578,7 +583,8 @@ function botTakeTurn(room, botIndex) {
     chosenColor = chooseBestColor(bot.hand);
   }
 
-  if (bot.hand.length === 2) {
+  // Bot UNO deyishi - kartasi 1 ta bo'lganda
+  if (bot.hand.length === 1) {
     bot.saidUno = true;
     setTimeout(() => {
       io.to(room.id).emit('chatMessage', { type: 'uno', message: `🎴 ${bot.name}: UNO!!!` });

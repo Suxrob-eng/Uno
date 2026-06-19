@@ -221,6 +221,28 @@ function canPlayCard(card, topCard, currentColor, mustDraw, isCurrentPlayer = tr
     return false;
 }
 
+// ==================== UNO ANIMATION ====================
+function showUnoAnimation(playerName) {
+    const container = document.getElementById('game-screen');
+    if (!container) return;
+    
+    // Eski animatsiyani o'chirish
+    const old = container.querySelector('.uno-animation');
+    if (old) old.remove();
+    
+    const unoDiv = document.createElement('div');
+    unoDiv.className = 'uno-animation';
+    unoDiv.innerHTML = `
+        <span class="uno-text">${escapeHtml(playerName)} </span>
+        <span class="uno-text uno-highlight">UNO!</span>
+    `;
+    container.appendChild(unoDiv);
+    
+    setTimeout(() => {
+        if (unoDiv.parentNode) unoDiv.remove();
+    }, 2500);
+}
+
 function renderMyHand(gs, isMyTurn) {
     if (!els.myHand) return;
     els.myHand.innerHTML = '';
@@ -424,7 +446,7 @@ function updateGameUI(gs) {
         }
     }
 
-    if (gs.gameState === 'finished' && gs.winner) showWinModal(gs.winner);
+    if (gs.gameState === 'finished' && gs.finalRankings) showRankingsModal(gs.finalRankings);
 }
 
 function onPlayCard(card, index) {
@@ -445,24 +467,61 @@ function hideColorPicker() {
     if (els.colorPicker) els.colorPicker.classList.add('hidden');
 }
 
-function showWinModal(winner) {
+function showRankingsModal(rankings) {
     if (!els.winModal) return;
-    const isWinner = winner?.id === state.myId;
-    const winnerIsBot = winner?.id && winner.id.toString().startsWith('BOT_');
+    
+    const myRanking = rankings.find(r => r.id === state.myId);
+    const isWinner = myRanking?.rank === 1;
+    const winner = rankings.find(r => r.rank === 1);
+    const winnerIsBot = winner?.isBot || false;
 
-    if (typeof confetti === 'function') {
-        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+    if (typeof confetti === 'function' && isWinner) {
+        confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
+        setTimeout(() => {
+            confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+        }, 500);
     }
 
+    let title = '';
+    let message = '';
     if (isWinner) {
-        if (els.winTitle) els.winTitle.textContent = '🎉 Siz g\'oldingiz!';
-        if (els.winMessage) els.winMessage.textContent = 'Tabriklaymiz! Zo\'r o\'yin!';
+        title = '🎉 Siz g\'oldingiz!';
+        message = 'Tabriklaymiz! Zo\'r o\'yin! Siz UNO chempionisiz!';
     } else if (winnerIsBot) {
-        if (els.winTitle) els.winTitle.textContent = '🤖 Bot g\'olib bo\'ldi!';
-        if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'Bot'} sizni yutdi! Yana bir bor urinib ko\'ring!`;
+        title = '🤖 Bot g\'olib bo\'ldi!';
+        message = `${winner?.name || 'Bot'} sizni yutdi! Yana bir bor urinib ko\'ring!`;
     } else {
-        if (els.winTitle) els.winTitle.textContent = `😢 ${winner?.name || 'O\'yinchi'} g\'olib!`;
-        if (els.winMessage) els.winMessage.textContent = `${winner?.name || 'O\'yinchi'} barcha kartalarini o\'ynadi!`;
+        const rankEmoji = myRanking?.rank === 2 ? '🥈' : myRanking?.rank === 3 ? '🥉' : '😊';
+        title = `${rankEmoji} O'yin yakunlandi!`;
+        message = `${winner?.name || 'O\'yinchi'} ${winner?.rank || 1}-o'ringa chiqdi! Siz ${myRanking?.rank || '?'}-o'ringa chiqdingiz.`;
+    }
+
+    if (els.winTitle) els.winTitle.textContent = title;
+    if (els.winMessage) {
+        // Reyting jadvalini qo'shish
+        let rankingsHtml = `
+            <div class="rankings-container" style="margin-top: 16px;">
+                <div class="rankings-header">
+                    <span>#</span>
+                    <span>O'yinchi</span>
+                    <span>Kartalar</span>
+                </div>
+        `;
+        
+        rankings.forEach(r => {
+            const isMyRank = r.id === state.myId;
+            const cardCount = state.gameState?.players?.find(p => p.id === r.id)?.cardCount || 0;
+            rankingsHtml += `
+                <div class="ranking-item ${isMyRank ? 'my-rank' : ''} rank-${r.rank}">
+                    <span class="rank-number">${r.rank}</span>
+                    <span class="rank-name">${r.isBot ? '🤖 ' : ''}${escapeHtml(r.name)} ${isMyRank ? '⭐' : ''}</span>
+                    <span class="rank-points">${cardCount} karta</span>
+                </div>
+            `;
+        });
+        
+        rankingsHtml += '</div>';
+        els.winMessage.innerHTML = `<div>${message}</div>${rankingsHtml}`;
     }
 
     if (els.playAgainBtn) els.playAgainBtn.style.display = state.isHost ? 'block' : 'none';
@@ -557,6 +616,10 @@ function addChatMessage(data) {
     } else if (data.type === 'uno') {
         div.className = 'chat-msg uno-msg';
         div.textContent = data.message;
+        
+        // UNO animatsiyasini ko'rsatish
+        const playerName = data.message.replace('🎴 ', '').replace(' UNO dedi!', '').replace(' UNO!!!', '');
+        showUnoAnimation(playerName);
     } else {
         const isMe = data.playerName === authState.user?.displayName;
         div.className = `chat-msg ${isMe ? 'my-msg' : 'player-msg'}`;
@@ -747,6 +810,8 @@ function setupSocketEvents() {
         if (onlineEl) onlineEl.textContent = count;
     });
 }
+
+// ... qolgan funksiyalar (register, login, logout, etc.) o'zgarishsiz qoladi ...
 
 async function register() {
     const username = els.registerUsername?.value.trim();

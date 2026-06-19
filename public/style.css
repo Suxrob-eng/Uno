@@ -2320,3 +2320,194 @@ body {
         font-size: 18px;
     }
 }
+
+.uno-animation {
+    position: fixed;
+    top: 30%;
+    left: 50%;
+    transform: translateX(-50%) scale(0);
+    z-index: 999;
+    animation: unoPop 2.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    pointer-events: none;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(12px);
+    padding: 30px 50px;
+    border-radius: 30px;
+    border: 3px solid rgba(255, 215, 0, 0.5);
+    box-shadow: 0 0 80px rgba(255, 215, 0, 0.3);
+}
+
+.uno-animation .uno-text {
+    font-size: 48px;
+    font-weight: 900;
+    color: white;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.uno-animation .uno-highlight {
+    background: linear-gradient(135deg, #ffd32a, #ff6b35);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 52px;
+    animation: unoPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes unoPop {
+    0% {
+        transform: translateX(-50%) scale(0) rotate(-10deg);
+        opacity: 0;
+    }
+    15% {
+        transform: translateX(-50%) scale(1.3) rotate(5deg);
+        opacity: 1;
+    }
+    25% {
+        transform: translateX(-50%) scale(0.9) rotate(-3deg);
+    }
+    35% {
+        transform: translateX(-50%) scale(1.1) rotate(2deg);
+    }
+    45% {
+        transform: translateX(-50%) scale(1) rotate(0deg);
+    }
+    80% {
+        transform: translateX(-50%) scale(1) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(-50%) scale(1.2) rotate(5deg);
+        opacity: 0;
+    }
+}
+
+@keyframes unoPulse {
+    from {
+        transform: scale(1);
+        filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.3));
+    }
+    to {
+        transform: scale(1.08);
+        filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.8));
+    }
+}
+
+/* Ranking modal styles */
+.rankings-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    margin-top: 16px;
+}
+
+.rankings-header {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.ranking-item {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    align-items: center;
+    text-align: center;
+    transition: var(--transition);
+    border: 1px solid transparent;
+}
+
+.ranking-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(4px);
+}
+
+.ranking-item.my-rank {
+    background: rgba(255, 71, 87, 0.15);
+    border-color: rgba(255, 71, 87, 0.4);
+}
+
+.rank-number {
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.rank-name {
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    padding-left: 10px;
+}
+
+.rank-points {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffd32a;
+}
+
+.rank-1 .rank-number {
+    color: #ffd700;
+    text-shadow: 0 0 10px #ffd700;
+}
+
+.rank-2 .rank-number {
+    color: #c0c0c0;
+}
+
+.rank-3 .rank-number {
+    color: #cd7f32;
+}
+
+@media (max-width: 700px) {
+    .uno-animation {
+        padding: 20px 30px;
+        top: 25%;
+    }
+    
+    .uno-animation .uno-text {
+        font-size: 32px;
+    }
+    
+    .uno-animation .uno-highlight {
+        font-size: 36px;
+    }
+
+    .rankings-header, .ranking-item {
+        grid-template-columns: 50px 1fr 70px;
+        font-size: 12px;
+    }
+    
+    .rank-number {
+        font-size: 16px;
+    }
+    
+    .rank-name {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 500px) {
+    .uno-animation {
+        padding: 15px 20px;
+        top: 20%;
+        border-radius: 20px;
+    }
+    
+    .uno-animation .uno-text {
+        font-size: 24px;
+    }
+    
+    .uno-animation .uno-highlight {
+        font-size: 28px;
+    }
+}
