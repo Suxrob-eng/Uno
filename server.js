@@ -401,13 +401,35 @@ function broadcastState(room) {
   });
 }
 
+// ============================================
+// TO'G'RI APPLYPLAYCARD - UNO JAZOSIZ
+// ============================================
 function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
   const player = room.players[playerIndex];
   if (!player || !player.hand[cardIndex]) return null;
   
   const card = player.hand[cardIndex];
+  
+  // Agar o'yinchida 2 ta karta bo'lsa va bittasini o'ynamoqchi bo'lsa
+  // (ya'ni 1 ta karta qoladi), UNO holatini tekshiramiz
+  const willHaveOneCard = player.hand.length === 2;
+  
   player.hand.splice(cardIndex, 1);
-  player.saidUno = false;
+  
+  // Agar 1 ta karta qolgan bo'lsa va UNO demagan bo'lsa
+  // Bu yerda jazo bermaymiz, keyingi o'yinchi catchUno qilishi mumkin
+  if (willHaveOneCard && !player.saidUno) {
+    // UNO demadi - keyingi o'yinchi ushlashi mumkin
+    // Jazo bermaymiz, faqat holatni saqlaymiz
+  }
+  
+  // saidUnoni faqat o'yinchi UNO deyishi bilan to'g'rilaymiz
+  // Kartani o'ynaganda saidUno ni o'chirmaymiz (agar UNO demagan bo'lsa)
+  // Agar UNO degan bo'lsa, uni o'chiramiz
+  if (player.saidUno) {
+    player.saidUno = false;
+  }
+  
   room.discardPile.push(card);
 
   if (card.type === 'wild' || card.type === 'wild4') {
@@ -421,23 +443,10 @@ function applyPlayCard(room, playerIndex, cardIndex, chosenColor) {
     room.pendingDraw = 0;
   }
 
-  // O'yinchi tugatdimi?
+  // O'yinchi tugatdimi? (0 ta karta qoldi)
   if (player.hand.length === 0 && !player.finished) {
-    // UNO demaganligini tekshirish
-    if (!player.saidUno && player.hand.length === 0) {
-      // UNO demagan bo'lsa, 2 ta karta oladi
-      const drawn = drawCards(room, 2);
-      if (drawn.length > 0) {
-        player.hand.push(...drawn);
-      }
-      io.to(room.id).emit('chatMessage', { 
-        type: 'system', 
-        message: `⚠️ ${player.name} UNO demadi! +2 karta!` 
-      });
-      broadcastState(room);
-      nextPlayer(room);
-      return { won: false, finished: false };
-    }
+    // UNO demaganligi uchun jazo BERMAYMIZ!
+    // Chunki u allaqachon kartasini o'ynadi va g'olib bo'ldi
     
     player.finished = true;
     player.finishedOrder = (room.finishedCount || 0) + 1;
@@ -583,8 +592,9 @@ function botTakeTurn(room, botIndex) {
     chosenColor = chooseBestColor(bot.hand);
   }
 
-  // Bot UNO deyishi - kartasi 1 ta bo'lganda
-  if (bot.hand.length === 1) {
+  // Bot UNO deyishi - agar 2 ta kartasi bo'lsa va bittasini o'ynamoqchi bo'lsa
+  // (ya'ni 1 ta karta qoladi)
+  if (bot.hand.length === 2) {
     bot.saidUno = true;
     setTimeout(() => {
       io.to(room.id).emit('chatMessage', { type: 'uno', message: `🎴 ${bot.name}: UNO!!!` });
@@ -1150,13 +1160,28 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ============================================
+  // TO'G'RI CATCHUNO - FAQAT 1 KARTA QOLGANDA
+  // ============================================
   socket.on('catchUno', ({ targetId }) => {
     const room = getRoom(socket.roomId);
     if (!room) return;
+    
     const target = room.players.find(p => p.id === targetId);
+    
+    // To'g'ri shart: 
+    // 1. O'yinchida 1 ta karta bor (ya'ni UNO demagan)
+    // 2. O'yinchi UNO demagan (saidUno === false)
+    // 3. O'yinchi o'zi emas
+    // 4. O'yinchi tugatmagan
     if (target && target.hand.length === 1 && !target.saidUno && target.id !== socket.id && !target.finished) {
+      // JAZO: 2 ta karta oladi
       const drawn = drawCards(room, 2);
       target.hand.push(...drawn);
+      
+      // UNO holatini tiklaymiz (endi 3 ta kartasi bor)
+      target.saidUno = false;
+      
       io.to(socket.roomId).emit('chatMessage', {
         type: 'system',
         message: `😱 ${target.name} UNO demaganida ushlandi! +2 karta!`
@@ -1166,6 +1191,8 @@ io.on('connection', (socket) => {
       if (socket.userId) {
         updateUserStats(socket.userId, 0, 0, false, true);
       }
+    } else {
+      socket.emit('error', { message: 'Bu o\'yinchini ushlab bo\'lmaydi!' });
     }
   });
 

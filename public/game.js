@@ -226,7 +226,6 @@ function showUnoAnimation(playerName) {
     const container = document.getElementById('game-screen');
     if (!container) return;
     
-    // Eski animatsiyani o'chirish
     const old = container.querySelector('.uno-animation');
     if (old) old.remove();
     
@@ -498,9 +497,8 @@ function showRankingsModal(rankings) {
 
     if (els.winTitle) els.winTitle.textContent = title;
     if (els.winMessage) {
-        // Reyting jadvalini qo'shish
         let rankingsHtml = `
-            <div class="rankings-container" style="margin-top: 16px;">
+            <div class="rankings-container">
                 <div class="rankings-header">
                     <span>#</span>
                     <span>O'yinchi</span>
@@ -617,7 +615,6 @@ function addChatMessage(data) {
         div.className = 'chat-msg uno-msg';
         div.textContent = data.message;
         
-        // UNO animatsiyasini ko'rsatish
         const playerName = data.message.replace('🎴 ', '').replace(' UNO dedi!', '').replace(' UNO!!!', '');
         showUnoAnimation(playerName);
     } else {
@@ -810,8 +807,6 @@ function setupSocketEvents() {
         if (onlineEl) onlineEl.textContent = count;
     });
 }
-
-// ... qolgan funksiyalar (register, login, logout, etc.) o'zgarishsiz qoladi ...
 
 async function register() {
     const username = els.registerUsername?.value.trim();
